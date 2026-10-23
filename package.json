@@ -1,0 +1,21 @@
+{
+  "name": "place-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A shared 1000x1000 tile map server with a terminal client.",
+  "type": "module",
+  "bin": {
+    "place-server": "./world-server.js"
+  },
+  "scripts": {
+    "world": "node world-server.js",
+    "start": "node world-server.js",
+    "test": "node test/world-smoke.mjs"
+  },
+  "engines": {
+    "node": ">=21"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

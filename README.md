@@ -1,0 +1,155 @@
+# place
+
+A shared **1000×1000 tile map** you explore from the terminal. Every tile is a
+colored square; you spawn at a random spot, walk around with the arrow keys, and
+repaint the tile under you with the spacebar. Everyone connected sees the same
+map and each other, live.
+
+```
+┌────────────┐        ws://        ┌──────────────────┐
+│  place A   │◄──────────────────► │                  │
+├────────────┤                     │   world-server   │
+│  place B   │◄──────────────────► │  (1000×1000 map) │
+├────────────┤                     │                  │
+│  place C   │◄──────────────────► │                  │
+└────────────┘                     └──────────────────┘
+```
+
+Each tile is drawn as a **7-column × 3-row block of colored background**. Terminal
+cells are about twice as tall as they are wide, so 7×3 is close to square. Your
+position is marked with bold **white** arrows pointing at your dot; other players
+appear as bold **green** dots.
+
+```
+                                                                 v
+                                                              >  ●  <
+                                                                 ^
+
+ place  (550, 973)  color: magenta  online 2  |  arrows/wasd move  space paint  q quit
+```
+
+## Requirements
+
+- Node.js **21+** — runs the world server
+- Rust toolchain ([rustup.rs](https://rustup.rs)) — builds the `place` client
+
+## Quick start
+
+```bash
+# 1. install server deps
+npm install
+
+# 2. start the world server (ws://localhost:8090)
+npm run world
+
+# 3. in another terminal, build + install the client once
+cd place && cargo install --path . --root ~/.local && cd ..
+
+# 4. connect
+place
+```
+
+`place [server]`:
+
+```bash
+place                          # ws://localhost:8090
+place ws://localhost:8090
+place wss://place.example.com
+PLACE_SERVER=wss://place.example.com place
+```
+
+Run two or more `place` clients (different terminals, or on different machines)
+to see each other move and paint.
+
+## Controls
+
+| Key | Action |
+| --- | --- |
+| arrow keys / `wasd` | move one tile |
+| space | cycle the color of the tile you're on |
+| `q` / `Esc` / `Ctrl-C` | quit |
+
+## Colors
+
+12 colors from the standard 16-color ANSI palette, so they render in essentially
+every terminal. Space cycles:
+
+```
+white → red → green → yellow → blue → magenta → cyan
+      → bright red → bright green → bright yellow → bright blue → bright cyan → white
+```
+
+Tiles start white.
+
+## Project layout
+
+```
+world-server.js       shared map server (Node, authoritative)
+place/                the terminal client (Rust) — installs the `place` command
+  src/main.rs         TUI: raw mode, camera, 7×3 tile rendering
+test/world-smoke.mjs  server end-to-end test
+```
+
+## Server
+
+```bash
+npm run world             # ws://0.0.0.0:8090
+node world-server.js 9000 # pick a port
+PORT=9000 node world-server.js
+```
+
+The server is authoritative: it owns the tile colors and player positions. On
+connect a client receives the whole map run-length encoded (tiny while the map is
+mostly uniform) plus its spawn point; after that the server broadcasts only
+deltas (tile repaints and player moves). The map is a torus, so movement wraps
+around the edges. Actions are rate-limited.
+
+## Tests
+
+```bash
+npm test              # world server end-to-end test
+```
+
+## Protocol
+
+World server (`world-server.js`). Client → server:
+
+```jsonc
+{ "type": "move",  "dx": -1, "dy": 0 }  // dx/dy are -1, 0 or 1
+{ "type": "paint" }                      // cycle the tile you're standing on
+```
+
+Server → client:
+
+```jsonc
+{ "type": "init",  "id": 1, "width": 1000, "height": 1000,
+  "palette": [{ "name": "white", "fg": 37 }, /* … 12 colors … */],
+  "rle": [0, 1000000],                   // [color, count, color, count, …]
+  "you": { "x": 550, "y": 973 },
+  "players": [{ "id": 2, "x": 512, "y": 300 }] }
+{ "type": "tile",  "x": 550, "y": 973, "color": 5 }
+{ "type": "pos",   "id": 1, "x": 551, "y": 973 }
+{ "type": "join",  "id": 2, "x": 512, "y": 300 }
+{ "type": "leave", "id": 2 }
+{ "type": "error", "text": "Slow down." }
+```
+
+## Troubleshooting
+
+**`not a WebSocket server … (got HTTP 200 OK)`** — `place` reached something on
+that port, but it isn't the world server. Check what's listening and start the
+server on a free port:
+
+```bash
+lsof -nP -iTCP:8090 -sTCP:LISTEN     # who owns the port?
+npm run world                        # start the world server
+place ws://localhost:8090            # point the client at it
+```
+
+**`EADDRINUSE: address already in use 0.0.0.0:8090`** — the port is taken. Run on
+another port and pass it to the client:
+
+```bash
+node world-server.js 9000
+place ws://localhost:9000
+```
