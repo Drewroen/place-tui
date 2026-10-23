@@ -1,33 +1,28 @@
-# Fly.io configuration for the place world server.
-# One always-on machine: the map lives in memory and must be a single instance.
+# fly.toml app configuration file generated for place-tui on 2026-10-23T16:53:34-05:00
 #
-#   fly launch --no-deploy --copy-config   # creates the app (rename if taken)
-#   fly volumes create place_data --region sjc --size 1
-#   fly deploy
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
-# The client connects to wss://<app>.fly.dev
 
-app = "place-tui"
-primary_region = "sjc"
+app = 'place-tui'
+primary_region = 'sjc'
 
 [build]
-
 [env]
-  HOST = "0.0.0.0"
-  PORT = "8090"
-  WORLD_STATE_FILE = "/data/world.bin"
+  HOST = '0.0.0.0'
+  PORT = '8090'
+  WORLD_STATE_FILE = '/data/world.bin'
+
+[[mounts]]
+  source = 'place_data'
+  destination = '/data'
 
 [http_service]
   internal_port = 8090
   force_https = true
-  auto_stop_machines = false
+  auto_stop_machines = 'off'
   auto_start_machines = true
   min_machines_running = 1
 
-[mounts]
-  source = "place_data"
-  destination = "/data"
-
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "256mb"
+  size = 'shared-cpu-1x'
+  memory = '256mb'

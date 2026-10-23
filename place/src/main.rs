@@ -29,7 +29,7 @@ use serde_json::{json, Value};
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::{connect, Message, WebSocket};
 
-const DEFAULT_SERVER: &str = "ws://localhost:8090";
+const DEFAULT_SERVER: &str = "wss://place-tui.fly.dev";
 const READ_TIMEOUT_MS: u64 = 50;
 const CELL_W: usize = 7; // near-square: terminal cells are ~2:1 tall:wide
 const CELL_H: usize = 3;
@@ -53,7 +53,7 @@ Usage:
   place [options] [server]
 
 Arguments:
-  server                WebSocket URL (default: ws://localhost:8090)
+  server                WebSocket URL (default: wss://place-tui.fly.dev)
 
 Options:
   -s, --server <url>    server URL
@@ -96,7 +96,12 @@ fn parse_args() -> Config {
                     }
                 }
             }
-            other if other.starts_with("ws://") || other.starts_with("wss://") => {
+            other
+                if other.starts_with("ws://")
+                    || other.starts_with("wss://")
+                    || other.starts_with("http://")
+                    || other.starts_with("https://") =>
+            {
                 server = other.to_string();
             }
             other => {
@@ -550,7 +555,14 @@ fn net_thread(
 /// Make sure the URL has a path component so the HTTP request target is `/`
 /// rather than empty.
 fn normalize_url(server: &str) -> String {
-    let mut s = server.to_string();
+    // Accept http(s):// as a convenience and map it to ws(s)://.
+    let mut s = if let Some(rest) = server.strip_prefix("https://") {
+        format!("wss://{rest}")
+    } else if let Some(rest) = server.strip_prefix("http://") {
+        format!("ws://{rest}")
+    } else {
+        server.to_string()
+    };
     if let Some(pos) = s.find("://") {
         if !s[pos + 3..].contains('/') {
             s.push('/');

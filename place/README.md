@@ -46,13 +46,15 @@ Then just run:
 place
 ```
 
-## Run the server
+By default this connects to the public server at `wss://place-tui.fly.dev`.
 
-`place` needs a `world-server` running. From the repo root:
+## Run your own server
+
+To point at a server you run yourself instead:
 
 ```bash
 node world-server.js          # ws://localhost:8090
-node world-server.js 9000     # or another port
+place ws://localhost:8090
 ```
 
 ## Usage
@@ -61,7 +63,7 @@ node world-server.js 9000     # or another port
 place [options] [server]
 
 Arguments:
-  server                WebSocket URL (default: ws://localhost:8090)
+  server                WebSocket URL (default: wss://place-tui.fly.dev)
 
 Options:
   -s, --server <url>    server URL
@@ -72,10 +74,11 @@ Options:
 Examples:
 
 ```bash
-place                          # ws://localhost:8090
-place ws://localhost:8090
-place wss://place.example.com
-PLACE_SERVER=wss://place.example.com place
+place                              # wss://place-tui.fly.dev (default)
+place wss://place-tui.fly.dev
+place https://place-tui.fly.dev    # http(s):// is accepted too
+place ws://localhost:8090          # a server you run yourself
+PLACE_SERVER=ws://localhost:8090 place
 ```
 
 ### Controls

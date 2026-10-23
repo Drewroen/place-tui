@@ -35,32 +35,34 @@ appear as bold **green** dots.
 
 ## Quick start
 
+Install the client and run it. By default it connects to the public server at
+`wss://place-tui.fly.dev`:
+
 ```bash
-# 1. install server deps
-npm install
-
-# 2. start the world server (ws://localhost:8090)
-npm run world
-
-# 3. in another terminal, install the client once
-cd place && cargo install --path . --root ~/.local && cd ..
-# (or, without cloning: cargo install --git https://github.com/Drewroen/place-tui place)
-
-# 4. connect
+cargo install --git https://github.com/Drewroen/place-tui place
 place
 ```
 
-`place [server]`:
+`place [server]` points somewhere else when you want to:
 
 ```bash
-place                          # ws://localhost:8090
-place ws://localhost:8090
-place wss://place.example.com
-PLACE_SERVER=wss://place.example.com place
+place                              # wss://place-tui.fly.dev (default)
+place wss://place-tui.fly.dev
+place https://place-tui.fly.dev    # http(s):// is accepted too
+place ws://localhost:8090          # a server you run yourself
+PLACE_SERVER=ws://localhost:8090 place
 ```
 
 Run two or more `place` clients (different terminals, or on different machines)
 to see each other move and paint.
+
+### Run your own server
+
+```bash
+npm install
+npm run world                  # ws://localhost:8090
+place ws://localhost:8090
+```
 
 ## Controls
 
