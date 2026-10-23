@@ -1,0 +1,33 @@
+# Fly.io configuration for the place world server.
+# One always-on machine: the map lives in memory and must be a single instance.
+#
+#   fly launch --no-deploy --copy-config   # creates the app (rename if taken)
+#   fly volumes create place_data --region sjc --size 1
+#   fly deploy
+#
+# The client connects to wss://<app>.fly.dev
+
+app = "place-tui"
+primary_region = "sjc"
+
+[build]
+
+[env]
+  HOST = "0.0.0.0"
+  PORT = "8090"
+  WORLD_STATE_FILE = "/data/world.bin"
+
+[http_service]
+  internal_port = 8090
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[mounts]
+  source = "place_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

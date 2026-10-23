@@ -42,8 +42,9 @@ npm install
 # 2. start the world server (ws://localhost:8090)
 npm run world
 
-# 3. in another terminal, build + install the client once
+# 3. in another terminal, install the client once
 cd place && cargo install --path . --root ~/.local && cd ..
+# (or, without cloning: cargo install --git https://github.com/Drewroen/place-tui place)
 
 # 4. connect
 place
@@ -84,10 +85,12 @@ Tiles start white.
 ## Project layout
 
 ```
-world-server.js       shared map server (Node, authoritative)
-place/                the terminal client (Rust) — installs the `place` command
-  src/main.rs         TUI: raw mode, camera, 7×3 tile rendering
-test/world-smoke.mjs  server end-to-end test
+world-server.js           shared map server (Node, authoritative)
+place/                    the terminal client (Rust) — installs the `place` command
+  src/main.rs             TUI: raw mode, camera, 7×3 tile rendering
+test/world-smoke.mjs      server end-to-end test
+Dockerfile, fly.toml      deploy the server (see DEPLOY.md)
+.github/workflows/        CI, auto-deploy on push, and client releases
 ```
 
 ## Server
@@ -102,7 +105,14 @@ The server is authoritative: it owns the tile colors and player positions. On
 connect a client receives the whole map run-length encoded (tiny while the map is
 mostly uniform) plus its spawn point; after that the server broadcasts only
 deltas (tile repaints and player moves). The map is a torus, so movement wraps
-around the edges. Actions are rate-limited.
+around the edges. Actions are rate-limited. Set `WORLD_STATE_FILE` to persist the
+map across restarts.
+
+## Deploy
+
+The server must be a single always-on instance. Push to `main` and GitHub Actions
+deploys to Fly.io automatically (once set up) — a `Dockerfile` and `fly.toml` are
+ready to go. See **[DEPLOY.md](DEPLOY.md)** for the one-time setup and other hosts.
 
 ## Tests
 

@@ -25,6 +25,7 @@
  * Run:  node world-server.js [port]
  * Env:  PORT, HOST
  */
+import fs from 'node:fs';
 import { WebSocketServer } from 'ws';
 
 const PORT = Number(process.env.PORT ?? process.argv[2] ?? 8090);
@@ -60,6 +61,34 @@ const COLORS = PALETTE.length;
 const tiles = new Uint8Array(WIDTH * HEIGHT); // 0 == white
 const clients = new Map(); // ws -> { id, x, y, lastAction, actions }
 let nextId = 1;
+
+// Optional persistence: set WORLD_STATE_FILE to a path to keep the map across
+// restarts (useful on a host with a volume mounted).
+const STATE_FILE = process.env.WORLD_STATE_FILE || null;
+
+function loadState() {
+  if (!STATE_FILE) return;
+  try {
+    const buf = fs.readFileSync(STATE_FILE);
+    if (buf.length === tiles.length) {
+      tiles.set(buf);
+      log(`Loaded map state from ${STATE_FILE}`);
+    } else {
+      log(`Ignoring ${STATE_FILE}: expected ${tiles.length} bytes, got ${buf.length}`);
+    }
+  } catch (err) {
+    if (err.code !== 'ENOENT') log(`Could not load ${STATE_FILE}: ${err.message}`);
+  }
+}
+
+function saveState() {
+  if (!STATE_FILE) return;
+  try {
+    fs.writeFileSync(STATE_FILE, tiles);
+  } catch (err) {
+    log(`Could not save ${STATE_FILE}: ${err.message}`);
+  }
+}
 
 const C = {
   reset: '\x1b[0m',
@@ -130,7 +159,12 @@ function wrap(v, max) {
 
 // ---- connections -----------------------------------------------------------
 
+loadState();
+
 const wss = new WebSocketServer({ host: HOST, port: PORT });
+
+// Persist the map periodically so a restart doesn't wipe everyone's art.
+setInterval(saveState, 30_000).unref();
 
 wss.on('connection', (ws) => {
   const player = {
@@ -213,6 +247,7 @@ wss.on('error', (err) => {
 for (const sig of ['SIGINT', 'SIGTERM']) {
   process.on(sig, () => {
     log('Shutting down…');
+    saveState();
     for (const ws of clients.keys()) ws.close(1001, 'server shutting down');
     wss.close(() => process.exit(0));
     setTimeout(() => process.exit(0), 500).unref();

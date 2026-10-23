@@ -33,8 +33,12 @@ cargo install --path . --root ~/.local
 Or straight from git:
 
 ```bash
-cargo install --git <repo-url> place
+cargo install --git https://github.com/Drewroen/place-tui place
 ```
+
+Prebuilt binaries (no Rust needed) are attached to each [GitHub
+Release](https://github.com/Drewroen/place-tui/releases) for macOS (arm64 +
+x86_64), Linux (x86_64 + aarch64) and Windows.
 
 Then just run:
 
