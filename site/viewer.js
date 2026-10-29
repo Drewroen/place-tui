@@ -314,3 +314,27 @@ function endPointer(e) {
 }
 canvas.addEventListener('pointerup', endPointer);
 canvas.addEventListener('pointercancel', endPointer);
+
+// ---- install panel ---------------------------------------------------------
+// Click-to-copy the install command. The clipboard API needs a secure context;
+// when it's unavailable (testing over plain http, etc.) select the text instead
+// so the usual Cmd/Ctrl-C works.
+
+const copyBtn = document.getElementById('copy');
+const installCode = document.querySelector('#install code');
+if (copyBtn && installCode) {
+  copyBtn.addEventListener('click', async () => {
+    const cmd = installCode.textContent.trim();
+    try {
+      await navigator.clipboard.writeText(cmd);
+    } catch {
+      const range = document.createRange();
+      range.selectNodeContents(installCode);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+    copyBtn.textContent = 'copied ✓';
+    setTimeout(() => (copyBtn.textContent = 'copy'), 1200);
+  });
+}

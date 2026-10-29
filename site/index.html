@@ -21,8 +21,27 @@
       touch-action: none;           /* gestures on the map are ours, not the browser's */
       -webkit-user-select: none; user-select: none;
     }
-    footer { color: #888; padding-bottom: 14px; }
+    footer { color: #888; padding-bottom: 14px; text-align: center; }
     footer b { color: #ddd; font-weight: 600; }
+    footer a { color: #9ab; }
+    #install {
+      margin: 10px auto 0; display: inline-block; text-align: left;
+      border: 1px solid #333; border-radius: 6px;
+      padding: 10px 12px; background: #16161a;
+    }
+    #install summary { cursor: pointer; color: #9ab; list-style: none; }
+    #install summary::marker, #install summary::-webkit-details-marker { display: none; }
+    #install summary:hover { color: #cde; }
+    #install summary code { color: #ddd; }
+    #install code {
+      display: inline-block; background: #0d0d10; padding: 8px 10px;
+      border-radius: 4px; margin-right: 8px;
+    }
+    #copy {
+      background: #24242b; color: #ddd; border: 1px solid #3a3a42;
+      border-radius: 4px; padding: 3px 10px; cursor: pointer; font: inherit;
+    }
+    #copy:hover { background: #2e2e36; }
     #status.live { color: #6ec06e; }
     #status.down { color: #e06c6c; }
   </style>
@@ -35,7 +54,13 @@
   <footer>
     <b id="status">connecting…</b>
     · <span id="count"></span>
+    <br>
+    <details id="install">
+      <summary>install <code>place</code> ↵</summary>
+      <code>cargo install place-tui</code><button id="copy" type="button">copy</button>
+    </details>
+    · <a href="https://crates.io/crates/place-tui" target="_blank" rel="noopener">crates.io</a>
   </footer>
-  <script src="viewer.js?v=3"></script>
+  <script src="viewer.js?v=4"></script>
 </body>
 </html>
