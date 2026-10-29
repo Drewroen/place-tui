@@ -10,16 +10,24 @@
  *
  * The map is a torus: moving off one edge wraps to the opposite edge.
  *
+ * Clients connect as players by default, or as viewers by adding "?viewer"
+ * to the WebSocket URL (that's what the web viewer does). Viewers get the
+ * same map and deltas but no spawn point, never appear in the player list,
+ * and their input is ignored.
+ *
  * Protocol (JSON):
+ *   connect:  ws://host/?viewer   // join as a viewer instead of a player
  *   client -> server:
- *     { type: "move",  dx, dy }   // dx/dy are -1, 0 or 1
- *     { type: "paint" }           // cycle the color of the tile you're standing on
+ *     { type: "move",  dx, dy }   // dx/dy are -1, 0 or 1 (players only)
+ *     { type: "paint" }           // cycle the color of the tile you're standing on (players only)
  *   server -> client:
- *     { type: "init",  id, width, height, palette, rle, you, players }
+ *     { type: "init",  id, width, height, palette, rle, you, players, viewers }
+ *                                   // "you" is present for players only
  *     { type: "tile",  x, y, color }
  *     { type: "pos",   id, x, y }
  *     { type: "join",  id, x, y }
  *     { type: "leave", id }
+ *     { type: "viewers", count }  // sent to everyone when the viewer count changes
  *     { type: "error", text }
  *
  * Run:  node world-server.js [port]
@@ -117,7 +125,34 @@ function broadcast(obj, except = null) {
 }
 
 function playerList() {
-  return [...clients.values()].map((p) => ({ id: p.id, x: p.x, y: p.y }));
+  return [...clients.values()]
+    .filter((p) => !p.viewer)
+    .map((p) => ({ id: p.id, x: p.x, y: p.y }));
+}
+
+function playerCount() {
+  let n = 0;
+  for (const p of clients.values()) if (!p.viewer) n++;
+  return n;
+}
+
+function viewerCount() {
+  return clients.size - playerCount();
+}
+
+function counts() {
+  const p = playerCount();
+  const v = viewerCount();
+  return `${p} player${p === 1 ? '' : 's'}, ${v} viewer${v === 1 ? '' : 's'}`;
+}
+
+/** Does this connection want to watch rather than play? ("?viewer" in the URL) */
+function isViewerRequest(req) {
+  try {
+    return new URL(req.url, 'http://x').searchParams.has('viewer');
+  } catch {
+    return false;
+  }
 }
 
 function randomCoord(max) {
@@ -166,20 +201,25 @@ const wss = new WebSocketServer({ host: HOST, port: PORT });
 // Persist the map periodically so a restart doesn't wipe everyone's art.
 setInterval(saveState, 30_000).unref();
 
-wss.on('connection', (ws) => {
-  const player = {
-    id: nextId++,
-    x: randomCoord(WIDTH),
-    y: randomCoord(HEIGHT),
-    lastAction: 0,
-    actions: 0,
-  };
+wss.on('connection', (ws, req) => {
+  const viewer = isViewerRequest(req);
+  const player = viewer
+    ? { id: nextId++, viewer: true, lastAction: 0, actions: 0 }
+    : {
+        id: nextId++,
+        viewer: false,
+        x: randomCoord(WIDTH),
+        y: randomCoord(HEIGHT),
+        lastAction: 0,
+        actions: 0,
+      };
   clients.set(ws, player);
 
-  log(
-    `${C.green}join${C.reset} #${player.id} at (${player.x}, ${player.y}) — ` +
-      `${clients.size} online`,
-  );
+  if (viewer) {
+    log(`${C.cyan}watch${C.reset} #${player.id} — ${counts()}`);
+  } else {
+    log(`${C.green}join${C.reset} #${player.id} at (${player.x}, ${player.y}) — ${counts()}`);
+  }
 
   send(ws, {
     type: 'init',
@@ -188,11 +228,16 @@ wss.on('connection', (ws) => {
     height: HEIGHT,
     palette: PALETTE,
     rle: encodeRLE(),
-    you: { x: player.x, y: player.y },
     players: playerList(),
+    viewers: viewerCount(),
+    ...(viewer ? {} : { you: { x: player.x, y: player.y } }),
   });
 
-  broadcast({ type: 'join', id: player.id, x: player.x, y: player.y }, ws);
+  if (viewer) {
+    broadcast({ type: 'viewers', count: viewerCount() }, ws);
+  } else {
+    broadcast({ type: 'join', id: player.id, x: player.x, y: player.y }, ws);
+  }
 
   ws.on('message', (data) => {
     if (isRateLimited(player)) {
@@ -207,6 +252,7 @@ wss.on('connection', (ws) => {
       return;
     }
     if (!msg || typeof msg !== 'object') return;
+    if (player.viewer) return; // viewers never move or paint
 
     if (msg.type === 'move') {
       const dx = Math.sign(Number(msg.dx) || 0);
@@ -227,8 +273,13 @@ wss.on('connection', (ws) => {
 
   ws.on('close', () => {
     clients.delete(ws);
-    log(`${C.yellow}leave${C.reset} #${player.id} — ${clients.size} online`);
-    broadcast({ type: 'leave', id: player.id });
+    if (player.viewer) {
+      log(`${C.yellow}unwatch${C.reset} #${player.id} — ${counts()}`);
+      broadcast({ type: 'viewers', count: viewerCount() });
+    } else {
+      log(`${C.yellow}leave${C.reset} #${player.id} — ${counts()}`);
+      broadcast({ type: 'leave', id: player.id });
+    }
   });
 
   ws.on('error', (err) => log(`${C.red}error${C.reset} #${player.id}: ${err.message}`));

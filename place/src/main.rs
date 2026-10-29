@@ -137,6 +137,7 @@ struct App {
     x: i32,
     y: i32,
     players: HashMap<u64, Player>,
+    viewers: u64,
     status: String,
     dirty: bool,
 }
@@ -153,6 +154,7 @@ impl App {
             x: 0,
             y: 0,
             players: HashMap::new(),
+            viewers: 0,
             status,
             dirty: true,
         }
@@ -212,6 +214,10 @@ impl App {
             Some("leave") => {
                 let id = value.get("id").and_then(Value::as_u64).unwrap_or(0);
                 self.players.remove(&id);
+                self.dirty = true;
+            }
+            Some("viewers") => {
+                self.viewers = value.get("count").and_then(Value::as_u64).unwrap_or(0);
                 self.dirty = true;
             }
             Some("error") => {
@@ -277,6 +283,8 @@ impl App {
                 );
             }
         }
+
+        self.viewers = value.get("viewers").and_then(Value::as_u64).unwrap_or(0);
 
         self.ready = true;
         self.dirty = true;
@@ -399,11 +407,12 @@ fn render(app: &App) {
         .map(|c| c.name.as_str())
         .unwrap_or("?");
     let bar = format!(
-        " place  ({}, {})  color: {}  online {}  |  arrows/wasd move  space paint  q quit ",
+        " place  ({}, {})  color: {}  players: {}  viewers: {}  |  arrows/wasd move  space paint  q quit ",
         app.x,
         app.y,
         color_name,
         app.players.len() + 1,
+        app.viewers,
     );
     let bar: String = bar.chars().take(cols as usize).collect();
     let padded = format!("{:<width$}", bar, width = cols as usize);

@@ -2,9 +2,10 @@
 
 /* Read-only map viewer for world-server.
  *
- * Connects like the `place` terminal client does, draws the whole map, and
- * applies live deltas — but never sends anything: no moves, no paints. The
- * page is static hosting; the only server it talks to is the existing
+ * Connects as a viewer ("?viewer" in the WebSocket URL), draws the whole
+ * map, and applies live deltas — but never sends anything: no moves, no
+ * paints. Viewers don't get a player on the map and don't count as players.
+ * The page is static hosting; the only server it talks to is the existing
  * world-server over its WebSocket.
  *
  * Point it somewhere else with ?server=ws://localhost:8090
@@ -14,6 +15,8 @@ const DEFAULT_SERVER = 'wss://place-tui.fly.dev';
 
 const params = new URLSearchParams(location.search);
 const SERVER = params.get('server') || DEFAULT_SERVER;
+// Watch rather than play: no spawn point, no avatar, not counted as a player.
+const WS_URL = SERVER.includes('?') ? `${SERVER}&viewer` : `${SERVER}?viewer`;
 
 // Standard 16-color ANSI palette (xterm values), keyed by SGR fg code — the
 // same codes the server's palette is built from.
@@ -42,6 +45,7 @@ let height = 0;
 let tiles = null; // Uint8Array of palette indices
 let palette = []; // [{ name, rgb }]
 let players = new Map(); // id -> { x, y }
+let viewerCount = 0;      // includes this page
 let attempts = 0;
 let dirty = true;
 let frame = ctx.createImageData(1, 1); // resized on init
@@ -74,7 +78,7 @@ function render() {
   ctx.setTransform(view.scale, 0, 0, view.scale, -view.ox * view.scale, -view.oy * view.scale);
   ctx.drawImage(off, 0, 0, width, height);
 
-  // Other players, in green — info only, we track them and nothing else.
+  // Players, in green — info only, we track them and nothing else.
   ctx.fillStyle = '#00ff00';
   for (const p of players.values()) {
     if (p.x >= 0 && p.y >= 0 && p.x < width && p.y < height) {
@@ -125,6 +129,7 @@ view.oy = 0;
     players = new Map(
       (msg.players || []).filter((p) => p.id !== msg.id).map((p) => [p.id, p]),
     );
+    viewerCount = msg.viewers | 0;
     dirty = true;
     setStatus('live', 'live');
     attempts = 0; // packets flow: the reconnect backoff has done its job
@@ -149,8 +154,10 @@ view.oy = 0;
   } else if (msg.type === 'leave') {
     players.delete(msg.id);
     dirty = true;
+  } else if (msg.type === 'viewers') {
+    viewerCount = msg.count | 0;
   }
-  $count.textContent = tiles ? `players: ${players.size + 1}` : '';
+  $count.textContent = tiles ? `players: ${players.size} · viewers: ${viewerCount}` : '';
 }
 
 function setStatus(text, cls) {
@@ -164,7 +171,7 @@ function connect() {
   setStatus('connecting…', '');
   let ws;
   try {
-    ws = new WebSocket(SERVER);
+    ws = new WebSocket(WS_URL);
   } catch {
     return scheduleReconnect();
   }

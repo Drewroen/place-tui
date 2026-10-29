@@ -22,7 +22,7 @@ dots switch to darker colors so they stay visible.
 ```
                 ●
          ·
- place  (550, 973)  color: magenta  online 2  |  arrows/wasd move  space paint  q quit
+ place  (550, 973)  color: magenta  players: 2  viewers: 1  |  arrows/wasd move  space paint  q quit
 ```
 
 (`●` bold white is you; `·` bold green are other players.)
@@ -148,7 +148,11 @@ npm test              # world server end-to-end test
 
 ## Protocol
 
-World server (`world-server.js`). Client → server:
+World server (`world-server.js`). Connect with `?viewer` in the WebSocket URL
+to watch instead of play: viewers get the same map and deltas but no spawn
+point, never appear in the player list, and their input is ignored.
+
+Client → server (players only):
 
 ```jsonc
 { "type": "move",  "dx": -1, "dy": 0 }  // dx/dy are -1, 0 or 1
@@ -161,12 +165,14 @@ Server → client:
 { "type": "init",  "id": 1, "width": 1024, "height": 1024,
   "palette": [{ "name": "white", "fg": 37 }, /* … 12 colors … */],
   "rle": [0, 1048576],                   // [color, count, color, count, …]
-  "you": { "x": 550, "y": 973 },
-  "players": [{ "id": 2, "x": 512, "y": 300 }] }
+  "you": { "x": 550, "y": 973 },        // players only
+  "players": [{ "id": 2, "x": 512, "y": 300 }],
+  "viewers": 1 }
 { "type": "tile",  "x": 550, "y": 973, "color": 5 }
 { "type": "pos",   "id": 1, "x": 551, "y": 973 }
 { "type": "join",  "id": 2, "x": 512, "y": 300 }
 { "type": "leave", "id": 2 }
+{ "type": "viewers", "count": 3 }        // viewer count changed
 { "type": "error", "text": "Slow down." }
 ```
 

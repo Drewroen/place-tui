@@ -168,6 +168,45 @@ async function main() {
   const tiles2 = decodeRLE(init2.rle, WIDTH * HEIGHT);
   assert.equal(tiles2[0], 0, 'tile at (0,0) is white again');
 
+  // ---- viewers watch without joining as players ----
+  alice.clear();
+  const dave = createClient(`${base}/?viewer`);
+  await dave.open;
+  const daveInit = await dave.waitFor((m) => m.type === 'init');
+  assert.ok(!('you' in daveInit), 'viewer init has no spawn point');
+  assert.equal(daveInit.viewers, 1, 'viewer init reports one viewer');
+  assert.ok(
+    !daveInit.players.some((p) => p.id === daveInit.id),
+    'viewer is not in the player list',
+  );
+
+  // players are told the viewer count changed, but no join is announced
+  const vc = await alice.waitFor((m) => m.type === 'viewers' && m.count === 1);
+  assert.equal(vc.count, 1);
+  assert.ok(
+    !alice.messages.some((m) => m.type === 'join' && m.id === daveInit.id),
+    'viewers do not announce a join',
+  );
+
+  // viewer input is ignored — nothing is broadcast
+  alice.clear();
+  dave.send({ type: 'move', dx: 1, dy: 0 });
+  dave.send({ type: 'paint' });
+  await new Promise((r) => setTimeout(r, 300));
+  assert.ok(
+    !alice.messages.some((m) => m.type === 'pos' || m.type === 'tile'),
+    'viewer moves and paints are ignored',
+  );
+
+  // a viewer leaving updates the count but announces no leave
+  alice.clear();
+  dave.ws.close();
+  await alice.waitFor((m) => m.type === 'viewers' && m.count === 0);
+  assert.ok(
+    !alice.messages.some((m) => m.type === 'leave' && m.id === daveInit.id),
+    'viewers do not announce a leave',
+  );
+
   // ---- disconnect announces a leave ----
   bob.ws.close();
   await alice.waitFor((m) => m.type === 'leave');
