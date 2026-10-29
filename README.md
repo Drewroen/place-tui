@@ -113,8 +113,12 @@ The server is authoritative: it owns the tile colors and player positions. On
 connect a client receives the whole map run-length encoded (tiny while the map is
 mostly uniform) plus its spawn point; after that the server broadcasts only
 deltas (tile repaints and player moves). The map is a torus, so movement wraps
-around the edges. Actions are rate-limited. Set `WORLD_STATE_FILE` to persist the
-map across restarts.
+around the edges. Actions are rate-limited per connection, with separate budgets
+for moves and paints plus a short per-tile paint cooldown; clients that keep
+flooding after repeated warnings are disconnected. Tune it with
+`MAX_MOVES_PER_SEC`, `MAX_PAINTS_PER_SEC`, `MAX_MESSAGES_PER_SEC`,
+`PAINT_COOLDOWN_MS`, and `MAX_REJECTIONS_PER_SEC`. Set `WORLD_STATE_FILE` to
+persist the map across restarts.
 
 ## Deploy
 
@@ -156,7 +160,9 @@ Client → server (players only):
 
 ```jsonc
 { "type": "move",  "dx": -1, "dy": 0 }  // dx/dy are -1, 0 or 1
-{ "type": "paint" }                      // cycle the tile you're standing on
+{ "type": "paint", "x": 550, "y": 973 } // cycle the tile you're standing on
+                                         // x/y optional, but must match your
+                                         // server-side position when present
 ```
 
 Server → client:
@@ -169,11 +175,14 @@ Server → client:
   "players": [{ "id": 2, "x": 512, "y": 300 }],
   "viewers": 1 }
 { "type": "tile",  "x": 550, "y": 973, "color": 5 }
-{ "type": "pos",   "id": 1, "x": 551, "y": 973 }
+{ "type": "pos",   "id": 1, "x": 551, "y": 973 } // every move is answered with the
+                                                  // authoritative position, even when
+                                                  // the move is rate-limited away
 { "type": "join",  "id": 2, "x": 512, "y": 300 }
 { "type": "leave", "id": 2 }
 { "type": "viewers", "count": 3 }        // viewer count changed
-{ "type": "error", "text": "Slow down." }
+{ "type": "error", "text": "Slow down." } // rate limited (at most once every few seconds)
+{ "type": "error", "text": "Paint where you stand." }
 ```
 
 ## Troubleshooting

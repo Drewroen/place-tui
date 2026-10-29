@@ -32,6 +32,10 @@ use tungstenite::{connect, Message, WebSocket};
 
 const DEFAULT_SERVER: &str = "wss://place-tui.fly.dev";
 const READ_TIMEOUT_MS: u64 = 50;
+/// How many moves may be awaiting the server's acknowledgement. Bounds the
+/// flood a held arrow key can send, and keeps our position close enough to the
+/// server's that a paint's coordinates still match.
+const MAX_MOVES_IN_FLIGHT: u8 = 4;
 const SELF_STYLE: &str = "1;97"; // bold bright white — you
 const OTHER_STYLE: &str = "1;92"; // bold bright green — other players
 const QUIT_SENTINEL: &str = "\u{0}quit";
@@ -140,6 +144,10 @@ struct App {
     viewers: u64,
     status: String,
     dirty: bool,
+    /// Moves sent but not yet acknowledged by a `pos` for ourselves.
+    moves_in_flight: u8,
+    /// Space was pressed while moves were in flight; paint once they settle.
+    paint_queued: bool,
 }
 
 impl App {
@@ -157,6 +165,8 @@ impl App {
             viewers: 0,
             status,
             dirty: true,
+            moves_in_flight: 0,
+            paint_queued: false,
         }
     }
 
@@ -192,6 +202,7 @@ impl App {
                 if id == self.id {
                     self.x = x;
                     self.y = y;
+                    self.moves_in_flight = self.moves_in_flight.saturating_sub(1);
                 } else if let Some(p) = self.players.get_mut(&id) {
                     p.x = x;
                     p.y = y;
@@ -287,6 +298,8 @@ impl App {
         self.viewers = value.get("viewers").and_then(Value::as_u64).unwrap_or(0);
 
         self.ready = true;
+        self.moves_in_flight = 0;
+        self.paint_queued = false;
         self.dirty = true;
     }
 
@@ -564,12 +577,14 @@ fn normalize_url(server: &str) -> String {
 // ---- input -----------------------------------------------------------------
 
 fn send_move(app: &mut App, dx: i32, dy: i32, out: &Sender<String>) {
-    if !app.ready {
+    if !app.ready || app.moves_in_flight >= MAX_MOVES_IN_FLIGHT {
         return;
     }
-    app.x = (app.x + dx).rem_euclid(app.width);
-    app.y = (app.y + dy).rem_euclid(app.height);
-    app.dirty = true;
+    app.moves_in_flight += 1;
+    // Movement is server-authoritative: don't move locally, wait for the
+    // server's `pos` reply. That keeps our view from drifting when the server
+    // rate-limits (drops) a move, which used to leave us painting the wrong
+    // tile.
     let _ = out.send(json!({ "type": "move", "dx": dx, "dy": dy }).to_string());
 }
 
@@ -577,15 +592,16 @@ fn send_paint(app: &mut App, out: &Sender<String>) {
     if !app.ready {
         return;
     }
-    if let Some(i) = app.index(app.x, app.y) {
-        if !app.palette.is_empty() {
-            if let Some(t) = app.tiles.get_mut(i) {
-                *t = (*t + 1) % app.palette.len() as u8;
-            }
-        }
+    // The paint carries our coordinates, and the server only paints the tile it
+    // believes we're on. If a move is still in flight our position isn't
+    // settled yet, so paint as soon as it is.
+    if app.moves_in_flight > 0 {
+        app.paint_queued = true;
+        return;
     }
-    app.dirty = true;
-    let _ = out.send(json!({ "type": "paint" }).to_string());
+    app.paint_queued = false;
+    // Painting is server-authoritative too: the `tile` broadcast updates us.
+    let _ = out.send(json!({ "type": "paint", "x": app.x, "y": app.y }).to_string());
 }
 
 // ---- main ------------------------------------------------------------------
@@ -669,6 +685,12 @@ fn main() {
                     break;
                 }
             }
+        }
+
+        // A paint requested while moves were still in flight fires as soon as
+        // the server confirms where we ended up.
+        if app.paint_queued && app.moves_in_flight == 0 {
+            send_paint(&mut app, &out_tx);
         }
 
         if app.dirty {

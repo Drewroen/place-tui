@@ -64,22 +64,35 @@ function decodeRLE(rle, expectedCells) {
   return tiles;
 }
 
-async function main() {
-  const server = spawn(process.execPath, [serverPath, String(PORT)], {
+async function startServer(port, extraEnv = {}) {
+  const proc = spawn(process.execPath, [serverPath, String(port)], {
     cwd: path.join(__dirname, '..'),
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, MAX_ACTIONS_PER_SEC: '100000' },
+    env: { ...process.env, ...extraEnv },
   });
-  server.stderr.on('data', (d) => process.stderr.write(`[server] ${d}`));
+  proc.stderr.on('data', (d) => process.stderr.write(`[server:${port}] ${d}`));
 
   await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('server did not start')), 5000);
-    server.stdout.on('data', (chunk) => {
+    const timer = setTimeout(() => reject(new Error(`server on ${port} did not start`)), 5000);
+    proc.stdout.on('data', (chunk) => {
       if (String(chunk).includes('World server')) {
         clearTimeout(timer);
         resolve();
       }
     });
+  });
+  return proc;
+}
+
+async function main() {
+  const server = await startServer(PORT, {
+    // The test drives the protocol directly and needs the limiter out of the
+    // way; the rate limits get their own dedicated servers further down.
+    MAX_MOVES_PER_SEC: '100000',
+    MAX_PAINTS_PER_SEC: '100000',
+    MAX_MESSAGES_PER_SEC: '100000',
+    MAX_REJECTIONS_PER_SEC: '100000',
+    PAINT_COOLDOWN_MS: '0',
   });
 
   const base = `ws://127.0.0.1:${PORT}`;
@@ -149,17 +162,29 @@ async function main() {
   assert.equal(pos.y, 0, 'y moves down');
 
   // ---- painting cycles through the palette and is broadcast ----
-  alice.send({ type: 'paint' });
+  alice.send({ type: 'paint', x: 0, y: 0 });
   let tile = await bob.waitFor((m) => m.type === 'tile' && m.x === 0 && m.y === 0);
   assert.equal(tile.color, 1, 'white -> red');
 
-  alice.send({ type: 'paint' });
+  alice.send({ type: 'paint', x: 0, y: 0 });
   tile = await bob.waitFor((m) => m.type === 'tile' && m.x === 0 && m.y === 0 && m.color === 2);
   assert.equal(tile.color, 2, 'red -> green');
 
   // cycle all the way back to white
-  for (let i = 0; i < 10; i++) alice.send({ type: 'paint' });
+  for (let i = 0; i < 10; i++) alice.send({ type: 'paint', x: 0, y: 0 });
   await alice.waitFor((m) => m.type === 'tile' && m.x === 0 && m.y === 0 && m.color === 0);
+
+  // ---- paint coordinates must match where the server has you standing ----
+  alice.clear();
+  bob.clear();
+  alice.send({ type: 'paint', x: 500, y: 500 });
+  const wrongTile = await alice.waitFor((m) => m.type === 'error');
+  assert.match(wrongTile.text, /stand/i, 'rejects a paint aimed somewhere else');
+  await new Promise((r) => setTimeout(r, 100));
+  assert.ok(
+    !bob.messages.some((m) => m.type === 'tile' && m.x === 500 && m.y === 500),
+    'a rejected paint changes no tile',
+  );
 
   // ---- a late joiner sees the same (unpainted) tile via RLE ----
   const carol = createClient(base);
@@ -191,7 +216,7 @@ async function main() {
   // viewer input is ignored — nothing is broadcast
   alice.clear();
   dave.send({ type: 'move', dx: 1, dy: 0 });
-  dave.send({ type: 'paint' });
+  dave.send({ type: 'paint', x: 0, y: 0 });
   await new Promise((r) => setTimeout(r, 300));
   assert.ok(
     !alice.messages.some((m) => m.type === 'pos' || m.type === 'tile'),
@@ -215,6 +240,59 @@ async function main() {
   carol.ws.close();
   server.kill('SIGTERM');
   await new Promise((r) => server.once('exit', r));
+
+  // ---- rate limiting: separate budgets, every move acked, paints throttled ----
+  const PORT_LIMITED = PORT + 1;
+  const limited = await startServer(PORT_LIMITED, {
+    MAX_MOVES_PER_SEC: '5',
+    MAX_PAINTS_PER_SEC: '2',
+    MAX_MESSAGES_PER_SEC: '100000',
+    MAX_REJECTIONS_PER_SEC: '100000', // don't kick here; just observe throttling
+    PAINT_COOLDOWN_MS: '0',
+  });
+
+  const lim = createClient(`ws://127.0.0.1:${PORT_LIMITED}`);
+  await lim.open;
+  const limInit = await lim.waitFor((m) => m.type === 'init');
+
+  // A held movement key sends more moves than the budget allows. The extras are
+  // dropped, but every move still gets exactly one `pos` reply so a client can
+  // tell when its position has settled (and so it can paint from it).
+  for (let i = 0; i < 50; i++) lim.send({ type: 'move', dx: 1, dy: 0 });
+  await new Promise((r) => setTimeout(r, 250));
+  const acks = lim.messages.filter((m) => m.type === 'pos' && m.id === limInit.id);
+  assert.equal(acks.length, 50, `every move is acknowledged (got ${acks.length})`);
+  const moved = (acks.at(-1).x - limInit.you.x + WIDTH) % WIDTH;
+  assert.ok(moved < 50, `excess moves were dropped (moved ${moved} of 50)`);
+
+  // Paints past the budget are throttled before they reach everyone.
+  const settled = acks.at(-1);
+  lim.clear();
+  for (let i = 0; i < 20; i++) lim.send({ type: 'paint', x: settled.x, y: settled.y });
+  await new Promise((r) => setTimeout(r, 250));
+  const tilesPainted = lim.messages.filter((m) => m.type === 'tile').length;
+  assert.ok(tilesPainted >= 1 && tilesPainted <= 3, `paints are throttled (got ${tilesPainted})`);
+  lim.ws.close();
+  limited.kill('SIGTERM');
+  await new Promise((r) => limited.once('exit', r));
+
+  // ---- sustained flooding closes the socket with 1008 ----
+  const PORT_FLOOD = PORT + 2;
+  const floodServer = await startServer(PORT_FLOOD, {
+    MAX_MOVES_PER_SEC: '1',
+    MAX_MESSAGES_PER_SEC: '100000',
+    MAX_REJECTIONS_PER_SEC: '10',
+  });
+  const flooder = createClient(`ws://127.0.0.1:${PORT_FLOOD}`);
+  await flooder.open;
+  await flooder.waitFor((m) => m.type === 'init');
+  const closed = new Promise((resolve) => {
+    flooder.ws.addEventListener('close', (e) => resolve(e.code), { once: true });
+  });
+  for (let i = 0; i < 200; i++) flooder.send({ type: 'move', dx: 1, dy: 0 });
+  assert.equal(await closed, 1008, 'a flood is closed with 1008');
+  floodServer.kill('SIGTERM');
+  await new Promise((r) => floodServer.once('exit', r));
 
   console.log('✓ all world tests passed');
 }
