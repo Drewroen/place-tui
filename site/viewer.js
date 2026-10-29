@@ -26,7 +26,6 @@ const ANSI = {
 
 const $status = document.getElementById('status');
 const $count = document.getElementById('count');
-const $tile = document.getElementById('tile');
 const canvas = document.getElementById('map');
 const ctx = canvas.getContext('2d');
 
@@ -201,16 +200,12 @@ function clampView() {
   view.oy = Math.min(Math.max(view.oy, 0), Math.max(0, height - visH));
 }
 
-/** Map an event to the tile under the cursor and its position in map pixels. */
-function eventTile(e) {
+/** Map an event to its position in map pixels (canvas coordinates). */
+function eventPos(e) {
   const rect = canvas.getBoundingClientRect();
-  const px = (e.clientX - rect.left) * (canvas.width / rect.width);
-  const py = (e.clientY - rect.top) * (canvas.height / rect.height);
   return {
-    px,
-    py,
-    x: Math.floor(view.ox + px / view.scale),
-    y: Math.floor(view.oy + py / view.scale),
+    px: (e.clientX - rect.left) * (canvas.width / rect.width),
+    py: (e.clientY - rect.top) * (canvas.height / rect.height),
   };
 }
 
@@ -228,27 +223,94 @@ function zoomAt(px, py, factor) {
   dirty = true;
 }
 
+// ---- interaction -----------------------------------------------------------
+// Desktop: left click zooms in 2×, right click zooms out 2×, drag pans.
+// Touch: one finger pans, two fingers pinch-zoom (either direction).
+
 canvas.addEventListener('click', (e) => {
-  const t = eventTile(e);
+  if (suppressClick) return; // was a drag/pinch, not a tap
+  const t = eventPos(e);
   zoomAt(t.px, t.py, 2);
 });
 canvas.addEventListener('contextmenu', (e) => {
   e.preventDefault(); // don't show the browser menu — right click means zoom out
-  const t = eventTile(e);
+  const t = eventPos(e);
   zoomAt(t.px, t.py, 0.5);
 });
 
-// ---- hover inspection ------------------------------------------------------
+const pointers = new Map(); // pointerId -> { px, py } (canvas coordinates)
+let drag = null;            // { px, py, ox, oy } while one pointer pans
+let pinch = null;           // gesture anchor while two pointers pinch
+let suppressClick = false;  // set when a gesture moved, so a stray click won't zoom
+
+function anchorPinch(a, b) {
+  const midPx = (a.px + b.px) / 2;
+  const midPy = (a.py + b.py) / 2;
+  pinch = {
+    scale0: view.scale,
+    dist0: Math.max(Math.hypot(a.px - b.px, a.py - b.py), 1),
+    wx0: view.ox + midPx / view.scale,
+    wy0: view.oy + midPy / view.scale,
+  };
+}
+
+canvas.addEventListener('pointerdown', (e) => {
+  if (e.pointerType === 'mouse' && e.button !== 0) return; // right click = zoom out
+  if (pointers.size >= 2) return;                          // pinch already running
+  canvas.setPointerCapture(e.pointerId);
+  const p = eventPos(e);
+  pointers.set(e.pointerId, p);
+  suppressClick = false;
+  if (pointers.size === 1) {
+    drag = { px: p.px, py: p.py, ox: view.ox, oy: view.oy };
+  } else if (pointers.size === 2) {
+    drag = null;
+    const [a, b] = [...pointers.values()];
+    anchorPinch(a, b);
+  }
+});
 
 canvas.addEventListener('pointermove', (e) => {
-  if (!tiles) return;
-  const t = eventTile(e);
-  if (t.x < 0 || t.y < 0 || t.x >= width || t.y >= height) return;
-  const color = tiles[t.y * width + t.x];
-  const name = palette[color] ? palette[color].name : '?';
-  $tile.textContent = `(${t.x}, ${t.y}) · ${name} · ${view.scale}× · click zoom in 2× · right click zoom out 2×`;
+  if (!pointers.has(e.pointerId) || !tiles) return;
+  const p = eventPos(e);
+  pointers.set(e.pointerId, p);
+
+  if (pointers.size === 1 && drag) {
+    // Only treat it as a pan once it moves a little, so mouse clicks aren't
+    // swallowed by sub-pixel jitter (click handler still zooms then).
+    if (Math.abs(p.px - drag.px) + Math.abs(p.py - drag.py) > 4) {
+      suppressClick = true;
+    }
+    view.ox = drag.ox - (p.px - drag.px) / view.scale;
+    view.oy = drag.oy - (p.py - drag.py) / view.scale;
+    clampView();
+    dirty = true;
+  } else if (pointers.size === 2 && pinch) {
+    const [a, b] = [...pointers.values()];
+    const dist = Math.max(Math.hypot(a.px - b.px, a.py - b.py), 1);
+    const midPx = (a.px + b.px) / 2;
+    const midPy = (a.py + b.py) / 2;
+    suppressClick = true;
+    view.scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, pinch.scale0 * dist / pinch.dist0));
+    // Keep the world point the pinch started on under the midpoint.
+    view.ox = pinch.wx0 - midPx / view.scale;
+    view.oy = pinch.wy0 - midPy / view.scale;
+    clampView();
+    dirty = true;
+  }
 });
 
-canvas.addEventListener('pointerleave', () => {
-  $tile.textContent = 'hover the map to inspect a tile · left click zoom in 2× · right click zoom out 2×';
-});
+function endPointer(e) {
+  if (!pointers.delete(e.pointerId)) return;
+  if (pointers.size === 1) {
+    // A pinch ended with one finger still down: keep panning smoothly.
+    const [p] = [...pointers.values()];
+    pinch = null;
+    drag = { px: p.px, py: p.py, ox: view.ox, oy: view.oy };
+  } else if (pointers.size === 0) {
+    pinch = null;
+    drag = null;
+  }
+}
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', endPointer);

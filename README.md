@@ -126,9 +126,10 @@ ready to go. See **[DEPLOY.md](DEPLOY.md)** for the one-time setup and other hos
 
 `site/` is a **read-only, live mirror** of the whole map. It opens a WebSocket to
 the same world server, draws all 1024×1024 tiles on a `<canvas>`, and applies
-updates as they happen — but it never paints. Left-click zooms in 2× around the
-cursor, right-click zooms out 2× (down to the full map), and hovering shows a
-tile's coordinates. `?server=ws://localhost:8090` points it elsewhere.
+updates as they happen — but it never paints. Left-click zooms in 2×, right-click
+zooms out 2×, dragging pans the view, and on touch devices one finger pans,
+a tap zooms in, and two fingers pinch-zoom. `?server=ws://localhost:8090`
+points it elsewhere.
 
 ```
 npm run world &                            # example: local server

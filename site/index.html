@@ -18,6 +18,8 @@
       width: min(92vmin, 720px); aspect-ratio: 1; image-rendering: pixelated;
       border: 1px solid #333; background: #e5e5e5;
       image-rendering: pixelated; cursor: crosshair;
+      touch-action: none;           /* gestures on the map are ours, not the browser's */
+      -webkit-user-select: none; user-select: none;
     }
     footer { color: #888; padding-bottom: 14px; }
     footer b { color: #ddd; font-weight: 600; }
@@ -33,8 +35,7 @@
   <footer>
     <b id="status">connecting…</b>
     · <span id="count"></span>
-    · <span id="tile">hover the map to inspect a tile · left click zoom in 2× · right click zoom out 2×</span>
   </footer>
-  <script src="viewer.js"></script>
+  <script src="viewer.js?v=3"></script>
 </body>
 </html>
