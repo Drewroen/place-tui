@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>place — the world map</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0; min-height: 100vh; display: flex; flex-direction: column;
+      align-items: center; gap: 12px; background: #0d0d10; color: #ddd;
+      font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    header { padding: 16px 12px 0; text-align: center; }
+    h1 { margin: 0; font-size: 18px; letter-spacing: .5px; }
+    header p { margin: 4px 0 0; color: #888; }
+    #map {
+      width: min(92vmin, 720px); aspect-ratio: 1; image-rendering: pixelated;
+      border: 1px solid #333; background: #e5e5e5;
+      image-rendering: pixelated; cursor: crosshair;
+    }
+    footer { color: #888; padding-bottom: 14px; }
+    footer b { color: #ddd; font-weight: 600; }
+    #status.live { color: #6ec06e; }
+    #status.down { color: #e06c6c; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>place — the world map</h1>
+    <p>read-only mirror of <b id="server">…</b> · look all you want, nothing here can paint</p>
+  </header>
+  <canvas id="map" width="1024" height="1024"></canvas>
+  <footer>
+    <b id="status">connecting…</b>
+    · <span id="count"></span>
+    · <span id="tile">hover the map to inspect a tile</span>
+  </footer>
+  <script src="viewer.js"></script>
+</body>
+</html>

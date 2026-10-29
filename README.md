@@ -95,6 +95,7 @@ Tiles start white.
 world-server.js           shared map server (Node, authoritative)
 place/                    the terminal client (Rust) — installs the `place` command
   src/main.rs             TUI: raw mode, camera, single-cell tile rendering
+site/                     read-only live map viewer — static page for GitHub Pages
 test/world-smoke.mjs      server end-to-end test
 Dockerfile, fly.toml      deploy the server (see DEPLOY.md)
 .github/workflows/        CI, auto-deploy on push, and client releases
@@ -120,6 +121,22 @@ map across restarts.
 The server must be a single always-on instance. Push to `main` and GitHub Actions
 deploys to Fly.io automatically (once set up) — a `Dockerfile` and `fly.toml` are
 ready to go. See **[DEPLOY.md](DEPLOY.md)** for the one-time setup and other hosts.
+
+## Live map website
+
+`site/` is a **read-only, live mirror** of the whole map. It opens a WebSocket to
+the same world server, draws all 1024×1024 tiles on a `<canvas>`, and applies
+updates as they happen — but it never paints. Hovering shows a tile's
+coordinates and color; `?server=ws://localhost:8090` points it elsewhere.
+
+```
+npm run world &                            # example: local server
+cd site && python3 -m http.server 8123     # open http://localhost:8123
+                                           #   ?server=ws://localhost:8090
+```
+
+Publish it via **Settings → Pages → Source: GitHub Actions**;
+`.github/workflows/pages.yml` deploys `site/` on every push to `main`.
 
 ## Tests
 
