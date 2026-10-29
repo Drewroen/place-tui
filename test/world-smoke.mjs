@@ -12,8 +12,8 @@ import path from 'node:path';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const serverPath = path.join(__dirname, '..', 'world-server.js');
 const PORT = 8124;
-const WIDTH = 1000;
-const HEIGHT = 1000;
+const WIDTH = 1024;
+const HEIGHT = 1024;
 
 function createClient(url) {
   const ws = new WebSocket(url);

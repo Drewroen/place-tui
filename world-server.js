@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * world-server — a shared, wrapping 1000x1000 paint map.
+ * world-server — a shared, wrapping 1024x1024 paint map.
  *
  * The server is authoritative: it owns the tile colors and player positions.
  * Every player is an anonymous guest (no names). On connect a client receives
@@ -31,8 +31,8 @@ import { WebSocketServer } from 'ws';
 const PORT = Number(process.env.PORT ?? process.argv[2] ?? 8090);
 const HOST = process.env.HOST ?? '0.0.0.0';
 
-const WIDTH = 1000;
-const HEIGHT = 1000;
+const WIDTH = 1024;
+const HEIGHT = 1024;
 const MAX_ACTIONS_PER_SEC = Number(process.env.MAX_ACTIONS_PER_SEC ?? 120); // move/paint messages allowed per second
 
 /**

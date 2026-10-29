@@ -1,10 +1,14 @@
 [package]
-name = "place"
+name = "place-tui"
 version = "0.2.0"
 edition = "2021"
 description = "Terminal client for a shared place / world map server"
 license = "MIT"
 readme = "README.md"
+repository = "https://github.com/Drewroen/place-tui"
+homepage = "https://github.com/Drewroen/place-tui"
+keywords = ["tui", "terminal", "multiplayer", "websocket", "game"]
+categories = ["command-line-utilities", "games"]
 
 [[bin]]
 name = "place"

@@ -1,0 +1,52 @@
+name: Publish
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Only publish when the crates.io token secret exists, so tags don't fail
+  # before setup. See DEPLOY.md.
+  check:
+    name: Check for CARGO_REGISTRY_TOKEN
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    steps:
+      - id: check
+        env:
+          TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          if [ -n "$TOKEN" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "CARGO_REGISTRY_TOKEN is set — publishing."
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::CARGO_REGISTRY_TOKEN is not set; skipping crates.io publish. See DEPLOY.md."
+          fi
+
+  crates-io:
+    name: Publish place-tui to crates.io
+    needs: check
+    if: needs.check.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check tag matches crate version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version=$(cargo metadata --no-deps --format-version 1 \
+            --manifest-path place/Cargo.toml | jq -r '.packages[0].version')
+          if [ "$tag" != "$version" ]; then
+            echo "::error::tag v$tag does not match place-tui version $version; bump place/Cargo.toml or retag."
+            exit 1
+          fi
+      - run: cargo publish --manifest-path place/Cargo.toml
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

@@ -1,26 +1,37 @@
 # place
 
-A terminal client for a shared **1000×1000 tile map**. Every tile is a colored
+A terminal client for a shared **1024×1024 tile map**. Every tile is a colored
 square. You spawn at a random spot, walk around with the arrow keys, and repaint
 the tile you're standing on with the spacebar. Everyone connected sees the same
 map and each other in real time.
 
 ```
-                                                                 v
-                                                              >  ●  <
-                                                                 ^
-
+                ●
+         ·
  place  (550, 973)  color: magenta  online 2  |  arrows/wasd move  space paint  q quit
 ```
 
-Each tile is a **7-column × 3-row block of colored background**. Terminal cells are
-about twice as tall as they are wide, so 7×3 is close to square — and the odd
-width centers the marker cleanly. Your position is marked with bold **white**
-arrows pointing at your dot; other players appear as bold **green** dots.
+(`●` bold white is you; `·` bold green are other players.)
+
+Every tile is a **single character cell of solid background color**. Your position
+is a bold **white** dot; other players are bold **green** dots.
 
 ## Install
 
 With a Rust toolchain ([rustup.rs](https://rustup.rs)):
+
+```bash
+# from crates.io (installs the `place` command)
+cargo install place-tui
+```
+
+Or straight from git:
+
+```bash
+cargo install --git https://github.com/Drewroen/place-tui place-tui
+```
+
+From a local checkout:
 
 ```bash
 # into ~/.cargo/bin (make sure it's on your PATH)
@@ -28,12 +39,6 @@ cargo install --path .
 
 # ...or into ~/.local/bin, which is on the PATH on many systems
 cargo install --path . --root ~/.local
-```
-
-Or straight from git:
-
-```bash
-cargo install --git https://github.com/Drewroen/place-tui place
 ```
 
 Prebuilt binaries (no Rust needed) are attached to each [GitHub

@@ -83,6 +83,43 @@ To make it the built-in default (so `place` alone works), set `DEFAULT_SERVER` i
 
   Put Caddy or nginx in front for TLS (e.g. Caddy: `reverse_proxy localhost:8090`).
 
+## Publish the client to crates.io
+
+The client crate lives in `place/` and is published to crates.io as
+**`place-tui`** (the name `place` was already taken). The binary it installs is
+still called `place`.
+
+One-time setup: create an API token at <https://crates.io/settings/tokens> and
+add it as a repository secret:
+
+```bash
+gh secret set CARGO_REGISTRY_TOKEN --repo Drewroen/place-tui
+```
+
+Then publish by pushing a version tag whose version matches `place/Cargo.toml`:
+
+```bash
+# bump `version` in place/Cargo.toml first, then:
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+`.github/workflows/publish.yml` runs `cargo publish` on `v*` tags, so the crate
+ships alongside the GitHub Release. Users install it with:
+
+```bash
+cargo install place-tui
+```
+
+To publish by hand from a checkout (after `cargo login`):
+
+```bash
+cargo publish --manifest-path place/Cargo.toml
+```
+
+Until the `CARGO_REGISTRY_TOKEN` secret exists the publish job is **skipped**, so
+tags don't fail before setup.
+
 ## Client binaries
 
 `.github/workflows/release.yml` builds `place` for macOS (arm64 + x86_64), Linux
@@ -90,5 +127,7 @@ To make it the built-in default (so `place` alone works), set `DEFAULT_SERVER` i
 GitHub Release. Users without Rust can download those; users with Rust can run:
 
 ```bash
-cargo install --git https://github.com/Drewroen/place-tui place
+cargo install place-tui
+# or, straight from git:
+cargo install --git https://github.com/Drewroen/place-tui place-tui
 ```

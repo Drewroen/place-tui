@@ -1,12 +1,13 @@
 //! place — a shared-map terminal client.
 //!
-//! Connects to a `world-server`, draws a camera view of the wrapping 1000x1000
-//! tile map (each tile is a 7x3 block of colored background), spawns you on a
+//! Connects to a `world-server`, draws a camera view of the wrapping 1024x1024
+//! tile map (each tile is a single colored character cell), spawns you on a
 //! random tile, and lets you walk with the arrow keys and repaint the tile under
-//! you with the spacebar. You're marked with bold white arrows pointing at your
-//! dot; other players are bold green dots.
+//! you with the spacebar. You're a bold white dot; other players are bold green
+//! dots.
 //!
 //! Install:
+//!   cargo install place-tui                # from crates.io
 //!   cargo install --path .                 # -> ~/.cargo/bin/place
 //!   cargo install --path . --root ~/.local # -> ~/.local/bin/place
 
@@ -31,8 +32,6 @@ use tungstenite::{connect, Message, WebSocket};
 
 const DEFAULT_SERVER: &str = "wss://place-tui.fly.dev";
 const READ_TIMEOUT_MS: u64 = 50;
-const CELL_W: usize = 7; // near-square: terminal cells are ~2:1 tall:wide
-const CELL_H: usize = 3;
 const SELF_STYLE: &str = "1;97"; // bold bright white — you
 const OTHER_STYLE: &str = "1;92"; // bold bright green — other players
 const QUIT_SENTINEL: &str = "\u{0}quit";
@@ -332,9 +331,8 @@ fn render(app: &App) {
 
     let w = app.width;
     let h = app.height;
-    let view_cols = (cols as usize / CELL_W).max(1) as i32;
-    let map_rows = (rows as usize).saturating_sub(1) / CELL_H;
-    let view_rows = map_rows.max(1) as i32;
+    let view_cols = cols as i32;
+    let view_rows = (rows as usize).saturating_sub(1).max(1) as i32;
     let ox = app.x - view_cols / 2;
     let oy = app.y - view_rows / 2;
     let self_cell = (view_cols / 2, view_rows / 2);
@@ -349,63 +347,46 @@ fn render(app: &App) {
         }
     }
 
-    let center = CELL_W / 2;
-    let mut glyph = vec![' '; CELL_W];
-
     for row in 0..view_rows {
-        for sub in 0..CELL_H {
-            let mut last_bg: i32 = i32::MIN;
-            let mut last_style: &str = "";
-            for col in 0..view_cols {
-                let wx = (ox + col).rem_euclid(w);
-                let wy = (oy + row).rem_euclid(h);
-                let color = app.tiles.get((wy * w + wx) as usize).copied().unwrap_or(0);
+        let mut last_bg: i32 = i32::MIN;
+        let mut last_style: &str = "";
+        for col in 0..view_cols {
+            let wx = (ox + col).rem_euclid(w);
+            let wy = (oy + row).rem_euclid(h);
+            let color = app.tiles.get((wy * w + wx) as usize).copied().unwrap_or(0);
 
-                for g in glyph.iter_mut() {
-                    *g = ' ';
-                }
-                let mut style: &str = "39"; // default foreground
-                if (col, row) == self_cell {
-                    // bold arrows point at your dot
-                    match sub {
-                        0 => glyph[center] = 'v',
-                        1 => {
-                            glyph[0] = '>';
-                            glyph[center] = '●';
-                            glyph[CELL_W - 1] = '<';
-                        }
-                        _ => glyph[center] = '^',
-                    }
-                    style = SELF_STYLE;
-                } else if others.contains_key(&(col, row)) && sub == 1 {
-                    glyph[center] = '●';
-                    style = OTHER_STYLE;
-                }
+            let bg: i32 = app
+                .palette
+                .get(color as usize)
+                .map(|c| c.fg as i32 + 10)
+                .unwrap_or(47);
 
-                let bg: i32 = app
-                    .palette
-                    .get(color as usize)
-                    .map(|c| c.fg as i32 + 10)
-                    .unwrap_or(47);
+            // One character per tile: a bold dot for you (white) and for other
+            // players (green). On white tiles those are hard to see, so darker
+            // foregrounds are used there.
+            let (glyph, style) = if (col, row) == self_cell {
+                ('●', if bg == 47 { "1;30" } else { SELF_STYLE })
+            } else if others.contains_key(&(col, row)) {
+                ('●', if bg == 47 { "1;32" } else { OTHER_STYLE })
+            } else {
+                (' ', "39")
+            };
 
-                if bg != last_bg {
-                    s.push_str("\x1b[");
-                    s.push_str(&bg.to_string());
-                    s.push('m');
-                    last_bg = bg;
-                }
-                if style != last_style {
-                    s.push_str("\x1b[");
-                    s.push_str(style);
-                    s.push('m');
-                    last_style = style;
-                }
-                for ch in &glyph {
-                    s.push(*ch);
-                }
+            if bg != last_bg {
+                s.push_str("\x1b[");
+                s.push_str(&bg.to_string());
+                s.push('m');
+                last_bg = bg;
             }
-            s.push_str("\x1b[0m\x1b[K\r\n");
+            if style != last_style {
+                s.push_str("\x1b[");
+                s.push_str(style);
+                s.push('m');
+                last_style = style;
+            }
+            s.push(glyph);
         }
+        s.push_str("\x1b[0m\x1b[K\r\n");
     }
 
     // Clear anything below the map, then draw the status bar on the last row.

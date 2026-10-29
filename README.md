@@ -1,6 +1,6 @@
 # place
 
-A shared **1000×1000 tile map** you explore from the terminal. Every tile is a
+A shared **1024×1024 tile map** you explore from the terminal. Every tile is a
 colored square; you spawn at a random spot, walk around with the arrow keys, and
 repaint the tile under you with the spacebar. Everyone connected sees the same
 map and each other, live.
@@ -9,24 +9,23 @@ map and each other, live.
 ┌────────────┐        ws://        ┌──────────────────┐
 │  place A   │◄──────────────────► │                  │
 ├────────────┤                     │   world-server   │
-│  place B   │◄──────────────────► │  (1000×1000 map) │
+│  place B   │◄──────────────────► │  (1024×1024 map) │
 ├────────────┤                     │                  │
 │  place C   │◄──────────────────► │                  │
 └────────────┘                     └──────────────────┘
 ```
 
-Each tile is drawn as a **7-column × 3-row block of colored background**. Terminal
-cells are about twice as tall as they are wide, so 7×3 is close to square. Your
-position is marked with bold **white** arrows pointing at your dot; other players
-appear as bold **green** dots.
+Each tile is a **single character cell** of solid background color. Your position
+is a bold **white** `●`; other players are bold **green** dots. On white tiles the
+dots switch to darker colors so they stay visible.
 
 ```
-                                                                 v
-                                                              >  ●  <
-                                                                 ^
-
+                ●
+         ·
  place  (550, 973)  color: magenta  online 2  |  arrows/wasd move  space paint  q quit
 ```
+
+(`●` bold white is you; `·` bold green are other players.)
 
 ## Requirements
 
@@ -39,8 +38,14 @@ Install the client and run it. By default it connects to the public server at
 `wss://place-tui.fly.dev`:
 
 ```bash
-cargo install --git https://github.com/Drewroen/place-tui place
+cargo install place-tui      # installs the `place` command
 place
+```
+
+From a git checkout instead:
+
+```bash
+cargo install --git https://github.com/Drewroen/place-tui place-tui
 ```
 
 `place [server]` points somewhere else when you want to:
@@ -89,7 +94,7 @@ Tiles start white.
 ```
 world-server.js           shared map server (Node, authoritative)
 place/                    the terminal client (Rust) — installs the `place` command
-  src/main.rs             TUI: raw mode, camera, 7×3 tile rendering
+  src/main.rs             TUI: raw mode, camera, single-cell tile rendering
 test/world-smoke.mjs      server end-to-end test
 Dockerfile, fly.toml      deploy the server (see DEPLOY.md)
 .github/workflows/        CI, auto-deploy on push, and client releases
@@ -134,9 +139,9 @@ World server (`world-server.js`). Client → server:
 Server → client:
 
 ```jsonc
-{ "type": "init",  "id": 1, "width": 1000, "height": 1000,
+{ "type": "init",  "id": 1, "width": 1024, "height": 1024,
   "palette": [{ "name": "white", "fg": 37 }, /* … 12 colors … */],
-  "rle": [0, 1000000],                   // [color, count, color, count, …]
+  "rle": [0, 1048576],                   // [color, count, color, count, …]
   "you": { "x": 550, "y": 973 },
   "players": [{ "id": 2, "x": 512, "y": 300 }] }
 { "type": "tile",  "x": 550, "y": 973, "color": 5 }
