@@ -38,10 +38,11 @@ Your server is now live at `wss://<app>.fly.dev`. Verify:
 place wss://<app>.fly.dev
 ```
 
-## Auto-deploy on every push to `main`
+## Auto-deploy on every release
 
-`.github/workflows/deploy.yml` deploys to Fly on every push to `main` (and via
-the Actions **Run workflow** button). It needs one repository secret:
+`.github/workflows/deploy.yml` deploys to Fly on every version tag (`v*`) —
+the same cadence as client releases — and via the Actions **Run workflow**
+button for a manual redeploy. It needs one repository secret:
 
 ```bash
 fly tokens create deploy
@@ -51,7 +52,7 @@ gh secret set FLY_API_TOKEN --repo Drewroen/place-tui   # paste the token
 Until that secret exists, the deploy job is **skipped** (CI still runs), so
 nothing breaks before setup.
 
-That's it — push to `main` and it ships.
+That's it — push a `v*` tag and it ships.
 
 ## Point the client at your server
 
