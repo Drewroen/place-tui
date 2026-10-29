@@ -100,8 +100,8 @@ Then publish by pushing a version tag whose version matches `place/Cargo.toml`:
 
 ```bash
 # bump `version` in place/Cargo.toml first, then:
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.0.1
+git push origin v0.0.1
 ```
 
 `.github/workflows/publish.yml` runs `cargo publish` on `v*` tags, so the crate
