@@ -69,6 +69,28 @@ npm run world                  # ws://localhost:8090
 place ws://localhost:8090
 ```
 
+## Local development
+
+A `Makefile` wraps the usual loop. It builds a debug client and runs both
+halves against `localhost:8090`; nothing is installed globally unless you ask.
+
+```bash
+make build          # npm ci + cargo build (debug client)
+
+make server         # terminal 1: ws://localhost:8090
+./bin/place-local   # terminal 2: client built from this checkout
+
+make test           # server end-to-end tests
+make check          # tests + cargo check
+
+make link           # optional: put `place-local` on PATH (~/.local/bin)
+```
+
+`make link` installs a symlink, so it tracks edits to `bin/place-local` and you
+can just run `place-local`. `make release` builds an optimized client and
+`make clean` removes build artifacts. Both `make server` and `place-local` read
+`PORT`, so `PORT=9000 make server` / `PORT=9000 place-local` runs a second world.
+
 ## Controls
 
 | Key | Action |
@@ -97,6 +119,8 @@ place/                    the terminal client (Rust) — installs the `place` co
   src/main.rs             TUI: raw mode, camera, single-cell tile rendering
 site/                     read-only live map viewer — static page for GitHub Pages
 test/world-smoke.mjs      server end-to-end test
+Makefile                  local dev: build, server, client, test
+bin/place-local           run the locally built client against the local server
 Dockerfile, fly.toml      deploy the server (see DEPLOY.md)
 .github/workflows/        CI, auto-deploy on push, and client releases
 ```
@@ -147,7 +171,8 @@ Publish it via **Settings → Pages → Source: GitHub Actions**;
 ## Tests
 
 ```bash
-npm test              # world server end-to-end test
+make test             # or: npm test — world server end-to-end test
+make check            # the above plus cargo check
 ```
 
 ## Protocol

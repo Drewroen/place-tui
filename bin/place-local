@@ -1,0 +1,43 @@
+#!/bin/sh
+# Run the `place` client built from this checkout against the local dev server.
+#
+#   ./bin/place-local                     # ws://localhost:8090 (or $PORT)
+#   PORT=9000 ./bin/place-local           # ws://localhost:9000
+#   ./bin/place-local wss://place-tui.fly.dev   # args pass through to `place`
+#
+# Build first with `make build`. `make link` puts this command on your PATH.
+
+set -eu
+
+# Resolve symlinks so this keeps working when installed via `make link`.
+target=$0
+while [ -L "$target" ]; do
+  dir=$(CDPATH= cd -- "$(dirname -- "$target")" && pwd)
+  target=$(readlink "$target")
+  case $target in
+    /*) ;;
+    *) target=$dir/$target ;;
+  esac
+done
+root=$(CDPATH= cd -- "$(dirname -- "$target")/.." && pwd)
+
+bin=
+for candidate in "$root/place/target/debug/place" "$root/place/target/release/place"; do
+  if [ -x "$candidate" ]; then
+    bin=$candidate
+    break
+  fi
+done
+
+if [ -z "$bin" ]; then
+  echo "place-local: no client build found under $root/place/target" >&2
+  echo "place-local: run 'make build' first" >&2
+  exit 1
+fi
+
+# Default to the local server; explicit arguments still win because `place`
+# only treats PLACE_SERVER as a fallback.
+: "${PLACE_SERVER:=ws://localhost:${PORT:-8090}}"
+export PLACE_SERVER
+
+exec "$bin" "$@"
