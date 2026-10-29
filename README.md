@@ -122,12 +122,13 @@ The server must be a single always-on instance. Push to `main` and GitHub Action
 deploys to Fly.io automatically (once set up) — a `Dockerfile` and `fly.toml` are
 ready to go. See **[DEPLOY.md](DEPLOY.md)** for the one-time setup and other hosts.
 
-## Live map website
+## Live map website — place — the wild west
 
 `site/` is a **read-only, live mirror** of the whole map. It opens a WebSocket to
 the same world server, draws all 1024×1024 tiles on a `<canvas>`, and applies
-updates as they happen — but it never paints. Hovering shows a tile's
-coordinates and color; `?server=ws://localhost:8090` points it elsewhere.
+updates as they happen — but it never paints. Left-click zooms in 2× around the
+cursor, right-click zooms out 2× (down to the full map), and hovering shows a
+tile's coordinates. `?server=ws://localhost:8090` points it elsewhere.
 
 ```
 npm run world &                            # example: local server

@@ -27,9 +27,16 @@ const ANSI = {
 const $status = document.getElementById('status');
 const $count = document.getElementById('count');
 const $tile = document.getElementById('tile');
-const $serverLabel = document.getElementById('server');
 const canvas = document.getElementById('map');
 const ctx = canvas.getContext('2d');
+
+// The 1px-per-tile world is painted once into an offscreen canvas; the visible
+// canvas draws it scaled through the current view (zoom + offsets).
+const off = document.createElement('canvas');
+const offCtx = off.getContext('2d');
+const view = { scale: 1, ox: 0, oy: 0 };
+const MIN_SCALE = 1;   // whole map
+const MAX_SCALE = 32;  // 32-tile blocks
 
 let width = 0;
 let height = 0;
@@ -39,8 +46,6 @@ let players = new Map(); // id -> { x, y }
 let attempts = 0;
 let dirty = true;
 let frame = ctx.createImageData(1, 1); // resized on init
-
-$serverLabel.textContent = SERVER.replace(/^wss?:\/\//, '');
 
 // ---- rendering -------------------------------------------------------------
 
@@ -62,7 +67,13 @@ function paintTile(i, color) {
 function render() {
   if (!dirty || !tiles) return;
   dirty = false;
-  ctx.putImageData(frame, 0, 0);
+  offCtx.putImageData(frame, 0, 0);
+
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.imageSmoothingEnabled = false;
+  ctx.setTransform(view.scale, 0, 0, view.scale, -view.ox * view.scale, -view.oy * view.scale);
+  ctx.drawImage(off, 0, 0, width, height);
 
   // Other players, in green — info only, we track them and nothing else.
   ctx.fillStyle = '#00ff00';
@@ -71,6 +82,7 @@ function render() {
       ctx.fillRect(p.x, p.y, 1, 1);
     }
   }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
 }
 
 (function loop() {
@@ -105,6 +117,11 @@ function handle(msg) {
     canvas.width = width;
     canvas.height = height;
     frame = ctx.createImageData(width, height);
+off.width = width;
+off.height = height;
+view.scale = 1;
+view.ox = 0;
+view.oy = 0;
     tiles = decodeRLE(msg.rle || []);
     players = new Map(
       (msg.players || []).filter((p) => p.id !== msg.id).map((p) => [p.id, p]),
@@ -175,19 +192,63 @@ function scheduleReconnect() {
 }
 connect();
 
+// ---- zoom (2× in on left click, 2× out on right click) ---------------------
+
+function clampView() {
+  const visW = width / view.scale;
+  const visH = height / view.scale;
+  view.ox = Math.min(Math.max(view.ox, 0), Math.max(0, width - visW));
+  view.oy = Math.min(Math.max(view.oy, 0), Math.max(0, height - visH));
+}
+
+/** Map an event to the tile under the cursor and its position in map pixels. */
+function eventTile(e) {
+  const rect = canvas.getBoundingClientRect();
+  const px = (e.clientX - rect.left) * (canvas.width / rect.width);
+  const py = (e.clientY - rect.top) * (canvas.height / rect.height);
+  return {
+    px,
+    py,
+    x: Math.floor(view.ox + px / view.scale),
+    y: Math.floor(view.oy + py / view.scale),
+  };
+}
+
+function zoomAt(px, py, factor) {
+  if (!tiles) return;
+  const target = Math.min(MAX_SCALE, Math.max(MIN_SCALE, view.scale * factor));
+  if (target === view.scale) return; // already at a limit
+  // Keep the tile under the cursor pinned while the scale changes.
+  const wx = view.ox + px / view.scale;
+  const wy = view.oy + py / view.scale;
+  view.scale = target;
+  view.ox = wx - px / view.scale;
+  view.oy = wy - py / view.scale;
+  clampView();
+  dirty = true;
+}
+
+canvas.addEventListener('click', (e) => {
+  const t = eventTile(e);
+  zoomAt(t.px, t.py, 2);
+});
+canvas.addEventListener('contextmenu', (e) => {
+  e.preventDefault(); // don't show the browser menu — right click means zoom out
+  const t = eventTile(e);
+  zoomAt(t.px, t.py, 0.5);
+});
+
 // ---- hover inspection ------------------------------------------------------
 
 canvas.addEventListener('pointermove', (e) => {
   if (!tiles) return;
-  const rect = canvas.getBoundingClientRect();
-  const x = Math.floor(((e.clientX - rect.left) / rect.width) * width);
-  const y = Math.floor(((e.clientY - rect.top) / rect.height) * height);
-  if (x < 0 || y < 0 || x >= width || y >= height) return;
-  const color = tiles[y * width + x];
+  const t = eventTile(e);
+  if (t.x < 0 || t.y < 0 || t.x >= width || t.y >= height) return;
+  const color = tiles[t.y * width + t.x];
   const name = palette[color] ? palette[color].name : '?';
-  $tile.textContent = `(${x}, ${y}) · ${name}`;
+  $tile.textContent = `(${t.x}, ${t.y}) · ${name} · ${view.scale}× · click zoom in 2× · right click zoom out 2×`;
 });
 
 canvas.addEventListener('pointerleave', () => {
-  $tile.textContent = 'hover the map to inspect a tile';
+  $tile.textContent = 'hover the map to inspect a tile · left click zoom in 2× · right click zoom out 2×';
 });
