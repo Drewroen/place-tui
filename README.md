@@ -81,7 +81,7 @@ make server         # terminal 1: ws://localhost:8090
 ./bin/place-local   # terminal 2: client built from this checkout
 
 make test           # server end-to-end tests
-make check          # tests + cargo check
+make check          # server + client tests
 
 make link           # optional: put `place-local` on PATH (~/.local/bin)
 ```
@@ -172,7 +172,7 @@ Publish it via **Settings → Pages → Source: GitHub Actions**;
 
 ```bash
 make test             # or: npm test — world server end-to-end test
-make check            # the above plus cargo check
+make check            # the above plus the client's unit tests
 ```
 
 ## Protocol

@@ -11,7 +11,7 @@
 //!   cargo install --path .                 # -> ~/.cargo/bin/place
 //!   cargo install --path . --root ~/.local # -> ~/.local/bin/place
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::env;
 use std::io::{self, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -31,11 +31,15 @@ use tungstenite::stream::MaybeTlsStream;
 use tungstenite::{connect, Message, WebSocket};
 
 const DEFAULT_SERVER: &str = "wss://place-tui.fly.dev";
-const READ_TIMEOUT_MS: u64 = 50;
+// Keep the socket read timeout short: the net thread only gets to flush
+// outgoing messages after a read returns, so this is added to every move's
+// latency. 5ms is cheap (a few hundred cheap wakeups per second at most) and
+// keeps keystrokes from sitting in the queue.
+const READ_TIMEOUT_MS: u64 = 5;
+const RECONNECT_POLL_MS: u64 = 50;
 /// How many moves may be awaiting the server's acknowledgement. Bounds the
-/// flood a held arrow key can send, and keeps our position close enough to the
-/// server's that a paint's coordinates still match.
-const MAX_MOVES_IN_FLIGHT: u8 = 4;
+/// flood a held arrow key can send and the size of the prediction queue.
+const MAX_MOVES_IN_FLIGHT: usize = 8;
 const SELF_STYLE: &str = "1;97"; // bold bright white — you
 const OTHER_STYLE: &str = "1;92"; // bold bright green — other players
 const QUIT_SENTINEL: &str = "\u{0}quit";
@@ -144,9 +148,10 @@ struct App {
     viewers: u64,
     status: String,
     dirty: bool,
-    /// Moves sent but not yet acknowledged by a `pos` for ourselves.
-    moves_in_flight: u8,
-    /// Space was pressed while moves were in flight; paint once they settle.
+    /// Moves sent but not yet acknowledged by the server, in order. We predict
+    /// them locally and replay whatever is left on top of each `pos` reply.
+    pending_moves: VecDeque<(i32, i32)>,
+    /// Space was pressed while moves were pending; paint once they settle.
     paint_queued: bool,
 }
 
@@ -165,7 +170,7 @@ impl App {
             viewers: 0,
             status,
             dirty: true,
-            moves_in_flight: 0,
+            pending_moves: VecDeque::new(),
             paint_queued: false,
         }
     }
@@ -200,9 +205,8 @@ impl App {
                 let x = value.get("x").and_then(Value::as_i64).unwrap_or(0) as i32;
                 let y = value.get("y").and_then(Value::as_i64).unwrap_or(0) as i32;
                 if id == self.id {
-                    self.x = x;
-                    self.y = y;
-                    self.moves_in_flight = self.moves_in_flight.saturating_sub(1);
+                    self.pending_moves.pop_front();
+                    self.reconcile(x, y);
                 } else if let Some(p) = self.players.get_mut(&id) {
                     p.x = x;
                     p.y = y;
@@ -298,9 +302,22 @@ impl App {
         self.viewers = value.get("viewers").and_then(Value::as_u64).unwrap_or(0);
 
         self.ready = true;
-        self.moves_in_flight = 0;
+        self.pending_moves.clear();
         self.paint_queued = false;
         self.dirty = true;
+    }
+
+    /// Adopt the server's position, then replay the moves it hasn't seen yet.
+    /// Each move gets exactly one `pos` reply, so this also undoes any move the
+    /// server dropped for rate-limiting without leaving us desynced.
+    fn reconcile(&mut self, server_x: i32, server_y: i32) {
+        let (mut x, mut y) = (server_x, server_y);
+        for &(dx, dy) in &self.pending_moves {
+            x = (x + dx).rem_euclid(self.width);
+            y = (y + dy).rem_euclid(self.height);
+        }
+        self.x = x;
+        self.y = y;
     }
 
     fn index(&self, x: i32, y: i32) -> Option<usize> {
@@ -330,14 +347,41 @@ impl Drop for Term {
     }
 }
 
-fn write_frame(frame: &str) {
+fn write_frame(frame: &str) -> io::Result<()> {
     let stdout = io::stdout();
     let mut out = stdout.lock();
-    let _ = out.write_all(frame.as_bytes());
-    let _ = out.flush();
+    out.write_all(frame.as_bytes())?;
+    out.flush()
 }
 
-fn render(app: &App) {
+/// A hung-up pty makes crossterm's event poll spin on EOF without returning,
+/// so a small watchdog thread watches for POLLHUP and exits the process. There
+/// is no terminal left to restore, and the OS closes the socket for us.
+#[cfg(unix)]
+fn spawn_tty_watchdog() {
+    use std::os::unix::io::AsRawFd;
+
+    thread::spawn(|| loop {
+        thread::sleep(Duration::from_millis(250));
+        let mut pfd = libc::pollfd {
+            fd: io::stdin().as_raw_fd(),
+            // POLLHUP is only reported on macOS when at least one event is
+            // requested, so ask for POLLIN (we ignore plain readiness).
+            events: libc::POLLIN,
+            revents: 0,
+        };
+        // SAFETY: poll only writes into the pollfd we own.
+        let ready = unsafe { libc::poll(&mut pfd, 1, 0) };
+        if ready > 0 && pfd.revents & libc::POLLHUP != 0 {
+            std::process::exit(0);
+        }
+    });
+}
+
+#[cfg(not(unix))]
+fn spawn_tty_watchdog() {}
+
+fn render(app: &App) -> io::Result<()> {
     let (cols, rows) = terminal::size().unwrap_or((80, 24));
     let mut s = String::with_capacity((cols as usize + 16) * rows as usize);
     s.push_str("\x1b[H");
@@ -346,8 +390,7 @@ fn render(app: &App) {
         s.push_str("\x1b[2J\x1b[0m");
         s.push_str(&format!("  {}", app.status));
         s.push_str("\x1b[0m");
-        write_frame(&s);
-        return;
+        return write_frame(&s);
     }
 
     let w = app.width;
@@ -433,7 +476,7 @@ fn render(app: &App) {
     s.push_str(&padded);
     s.push_str("\x1b[0m");
 
-    write_frame(&s);
+    write_frame(&s)
 }
 
 // ---- networking ------------------------------------------------------------
@@ -550,7 +593,7 @@ fn net_thread(
                     return;
                 }
             }
-            thread::sleep(Duration::from_millis(READ_TIMEOUT_MS));
+            thread::sleep(Duration::from_millis(RECONNECT_POLL_MS));
         }
     }
 }
@@ -577,14 +620,15 @@ fn normalize_url(server: &str) -> String {
 // ---- input -----------------------------------------------------------------
 
 fn send_move(app: &mut App, dx: i32, dy: i32, out: &Sender<String>) {
-    if !app.ready || app.moves_in_flight >= MAX_MOVES_IN_FLIGHT {
+    if !app.ready || app.pending_moves.len() >= MAX_MOVES_IN_FLIGHT {
         return;
     }
-    app.moves_in_flight += 1;
-    // Movement is server-authoritative: don't move locally, wait for the
-    // server's `pos` reply. That keeps our view from drifting when the server
-    // rate-limits (drops) a move, which used to leave us painting the wrong
-    // tile.
+    // Move immediately so the cursor feels local; the server's `pos` reply
+    // (sent for every move, applied or dropped) reconciles us if it disagrees.
+    app.x = (app.x + dx).rem_euclid(app.width);
+    app.y = (app.y + dy).rem_euclid(app.height);
+    app.dirty = true;
+    app.pending_moves.push_back((dx, dy));
     let _ = out.send(json!({ "type": "move", "dx": dx, "dy": dy }).to_string());
 }
 
@@ -595,7 +639,7 @@ fn send_paint(app: &mut App, out: &Sender<String>) {
     // The paint carries our coordinates, and the server only paints the tile it
     // believes we're on. If a move is still in flight our position isn't
     // settled yet, so paint as soon as it is.
-    if app.moves_in_flight > 0 {
+    if !app.pending_moves.is_empty() {
         app.paint_queued = true;
         return;
     }
@@ -636,12 +680,16 @@ fn main() {
             std::process::exit(1);
         }
     };
-    render(&app);
+    spawn_tty_watchdog();
+    let _ = render(&app);
 
     let mut running = true;
+    let mut last_health = Instant::now();
     while running {
-        if event::poll(Duration::from_millis(16)).unwrap_or(false) {
-            match event::read() {
+        // Treat terminal errors (e.g. the pty going away) as a reason to quit;
+        // otherwise `poll` fails instantly and this loop spins at 100% CPU.
+        match event::poll(Duration::from_millis(16)) {
+            Ok(true) => match event::read() {
                 Ok(Event::Key(key))
                     if key.kind == KeyEventKind::Press || key.kind == KeyEventKind::Repeat =>
                 {
@@ -667,8 +715,11 @@ fn main() {
                     }
                 }
                 Ok(Event::Resize(_, _)) => app.dirty = true,
-                _ => {}
-            }
+                Ok(_) => {}
+                Err(_) => running = false,
+            },
+            Ok(false) => {}
+            Err(_) => running = false,
         }
 
         loop {
@@ -689,13 +740,28 @@ fn main() {
 
         // A paint requested while moves were still in flight fires as soon as
         // the server confirms where we ended up.
-        if app.paint_queued && app.moves_in_flight == 0 {
+        if app.paint_queued && app.pending_moves.is_empty() {
             send_paint(&mut app, &out_tx);
         }
 
         if app.dirty {
-            render(&app);
-            app.dirty = false;
+            if render(&app).is_err() {
+                // The terminal is gone; stop instead of writing to a dead tty.
+                running = false;
+            } else {
+                app.dirty = false;
+                last_health = Instant::now();
+            }
+        }
+
+        // crossterm's poll can busy-loop on POLLHUP without surfacing an error,
+        // so probe the terminal now and then with an invisible, idempotent
+        // write. If it fails, the tty is gone and we should too.
+        if running && last_health.elapsed() >= Duration::from_secs(1) {
+            if write_frame("\x1b[?25l").is_err() {
+                running = false;
+            }
+            last_health = Instant::now();
         }
     }
 
@@ -703,5 +769,42 @@ fn main() {
     drop(out_tx);
     drop(_term); // restore the terminal before joining
     let _ = net.join();
-    println!("bye 👋");
+    // The terminal may already be gone; don't panic on a broken pipe.
+    let _ = writeln!(io::stdout(), "bye 👋");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn app_with_pending(pending: &[(i32, i32)]) -> App {
+        let mut app = App::new(String::new());
+        app.width = 10;
+        app.height = 10;
+        app.pending_moves.extend(pending.iter().copied());
+        app
+    }
+
+    #[test]
+    fn reconcile_replays_moves_the_server_has_not_seen() {
+        let mut app = app_with_pending(&[(1, 0), (1, 0)]);
+        app.pending_moves.pop_front(); // ack for the first move, server now at (1, 0)
+        app.reconcile(1, 0);
+        assert_eq!((app.x, app.y), (2, 0), "second move is still predicted");
+    }
+
+    #[test]
+    fn reconcile_undoes_a_dropped_move() {
+        let mut app = app_with_pending(&[(1, 0), (1, 0), (0, 1)]);
+        app.pending_moves.pop_front(); // the server dropped it and stayed at (0, 0)
+        app.reconcile(0, 0);
+        assert_eq!((app.x, app.y), (1, 1), "remaining moves replay from the ack");
+    }
+
+    #[test]
+    fn reconcile_wraps_at_the_edge() {
+        let mut app = app_with_pending(&[(-1, -1)]);
+        app.reconcile(0, 0);
+        assert_eq!((app.x, app.y), (9, 9));
+    }
 }

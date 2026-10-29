@@ -29,7 +29,7 @@ help:
 	@echo "  make server     run the world server on :$(PORT)"
 	@echo "  make client     run the local client against :$(PORT)"
 	@echo "  make test       run the server end-to-end tests"
-	@echo "  make check      tests plus cargo check"
+	@echo "  make check      server tests + client tests"
 	@echo "  make link       symlink 'place-local' into $(PREFIX)/bin"
 	@echo "  make unlink     remove that symlink"
 	@echo "  make clean      remove build artifacts"
@@ -66,7 +66,7 @@ test: node_modules
 	$(NPM) test
 
 check: test
-	$(CARGO) check --manifest-path place/Cargo.toml
+	$(CARGO) test --manifest-path place/Cargo.toml
 
 # A symlink (not a copy) so edits to bin/place-local take effect immediately.
 link:
