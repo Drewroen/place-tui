@@ -435,7 +435,13 @@ if (copyBtn && installCode) {
       selection.removeAllRanges();
       selection.addRange(range);
     }
-    copyBtn.textContent = 'copied ✓';
-    setTimeout(() => (copyBtn.textContent = 'copy'), 1200);
+    copyBtn.classList.add('copied');
+    copyBtn.setAttribute('aria-label', 'Copied');
+    copyBtn.title = 'Copied';
+    setTimeout(() => {
+      copyBtn.classList.remove('copied');
+      copyBtn.setAttribute('aria-label', 'Copy install command');
+      copyBtn.title = 'Copy install command';
+    }, 1200);
   });
 }

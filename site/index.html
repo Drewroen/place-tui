@@ -4,15 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>place — the wild west</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Victor+Mono:ital,wght@0,400;0,600;0,700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link href="https://cdn.jsdelivr.net/npm/@fontsource/iosevka@5.3.0/400.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/@fontsource/iosevka@5.3.0/600.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/@fontsource/iosevka@5.3.0/700.css" rel="stylesheet">
   <style>
     :root { color-scheme: dark; }
     html, body { height: 100%; }
     body {
       margin: 0; overflow: hidden; background: #0d0d10; color: #ddd;
-      font: 14px/1.5 'Victor Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font: 14px/1.5 'Iosevka', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     }
     #map {
       position: fixed; inset: 0; display: block;
@@ -70,12 +71,6 @@
       padding: 10px 12px; margin: 12px 0;
     }
     dialog pre code { background: none; padding: 0; }
-    dialog ul { margin: 10px 0; padding-left: 20px; color: #aaa; }
-    dialog li { margin: 4px 0; }
-    dialog kbd {
-      background: #24242b; border: 1px solid #3a3a42; border-bottom-width: 2px;
-      border-radius: 4px; padding: 1px 5px; color: #ddd; font: inherit; font-size: 12px;
-    }
     dialog a { color: #9ab; }
     #close-play {
       position: absolute; top: 10px; right: 12px;
@@ -84,10 +79,15 @@
     }
     #close-play:hover { color: #ddd; }
     #copy {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 30px; height: 30px; flex: none;
       background: #24242b; color: #ddd; border: 1px solid #3a3a42;
-      border-radius: 4px; padding: 3px 10px; cursor: pointer; font: inherit;
+      border-radius: 4px; cursor: pointer; font: inherit;
     }
     #copy:hover { background: #2e2e36; }
+    #copy svg { display: block; }
+    #copy.copied svg { display: none; }
+    #copy.copied::after { content: '✓'; color: #6ec06e; }
 
     @media (max-width: 620px) {
       header, footer { padding: 7px 10px; }
@@ -116,24 +116,12 @@
       <button id="close-play" type="submit" aria-label="Close">×</button>
     </form>
     <h2>play in your terminal</h2>
-    <p>
-      This page is the live map. To move around and paint, install the
-      <code>place</code> client and run it in your terminal.
-    </p>
-    <pre><code id="install-command">cargo install place-tui</code><button id="copy" type="button">copy</button></pre>
-    <p>Then run <code>place</code>. It connects to the public server by default.</p>
-    <ul>
-      <li><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> / <kbd>wasd</kbd> — move</li>
-      <li><kbd>space</kbd> — open the color picker</li>
-      <li><kbd>enter</kbd> — choose the highlighted color</li>
-      <li><kbd>q</kbd> / <kbd>esc</kbd> — quit</li>
-    </ul>
-    <p>Once you choose a brush, every tile you step onto is painted with it.</p>
+    <pre><code id="install-command">cargo install place-tui && place</code><button id="copy" type="button" aria-label="Copy install command" title="Copy install command"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="8" height="9" rx="1.4"></rect><path d="M3 11V3.5A1.5 1.5 0 0 1 4.5 2H10"></path></svg></button></pre>
     <p>
       <a href="https://crates.io/crates/place-tui" target="_blank" rel="noopener">view on crates.io</a>
     </p>
   </dialog>
 
-  <script src="viewer.js?v=8"></script>
+  <script src="viewer.js?v=9"></script>
 </body>
 </html>

@@ -17,10 +17,10 @@
   plus wheel/pinch zoom, with fixed title and stats overlays. Tiles default to a
   terminal-like 1.75:1 aspect ratio; override it with `?aspect=2`, for example,
   to match your terminal font.
-- The site footer now has a **play now** modal with install instructions and the
-  terminal controls.
+- The site footer now has a **play now** modal with a one-line install command
+  and a link to crates.io.
 - The live map starts more zoomed out so a larger part of the world is visible.
-- The site now uses the Victor Mono typeface.
+- The site now uses the Iosevka typeface.
 
 ### Compatibility
 
