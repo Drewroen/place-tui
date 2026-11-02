@@ -33,6 +33,7 @@ help:
 	@echo "  make link       symlink 'place-local' into $(PREFIX)/bin"
 	@echo "  make unlink     remove that symlink"
 	@echo "  make clean      remove build artifacts"
+	@echo "  ./bin/release   cut a new release (interactive)"
 	@echo
 	@echo "  PORT=9000 make server   # run on another port"
 	@echo "  PORT=9000 make client   # ...and connect to it"

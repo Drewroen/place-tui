@@ -54,6 +54,10 @@ nothing breaks before setup.
 
 That's it — push a `v*` tag and it ships.
 
+The `0.0.4` client requires a `0.0.4`-or-newer server: move messages can now
+carry a brush color so tiles are painted as you walk. Deploy the server and
+client from the same tag.
+
 ## Point the client at your server
 
 Users connect with:
@@ -97,12 +101,22 @@ add it as a repository secret:
 gh secret set CARGO_REGISTRY_TOKEN --repo Drewroen/place-tui
 ```
 
-Then publish by pushing a version tag whose version matches `place/Cargo.toml`:
+The easiest way to cut a release is:
+
+```bash
+./bin/release
+```
+
+It shows the current version, asks for the next one, updates the manifests and
+tag examples, runs the checks, commits, tags, and asks before pushing.
+
+The manual equivalent is pushing a version tag whose version matches
+`place/Cargo.toml`:
 
 ```bash
 # bump `version` in place/Cargo.toml first, then:
-git tag v0.0.3
-git push origin v0.0.3
+git tag v0.0.4
+git push origin v0.0.4
 ```
 
 `.github/workflows/publish.yml` runs `cargo publish` on `v*` tags, so the crate

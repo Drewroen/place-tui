@@ -59,6 +59,7 @@ make test           # server end-to-end tests
 make check          # server + client tests
 
 make link           # optional: put `place-local` on PATH (~/.local/bin)
+./bin/release       # interactive release: bump, test, commit, tag, push
 ```
 
 

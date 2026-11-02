@@ -1,6 +1,6 @@
 [package]
 name = "place-tui"
-version = "0.0.3"
+version = "0.0.4"
 edition = "2021"
 description = "Terminal client for a shared place / world map server"
 license = "MIT"

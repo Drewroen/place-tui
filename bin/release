@@ -1,0 +1,163 @@
+#!/usr/bin/env bash
+# Cut a new place release.
+#
+# Shows the current version, asks for the next one, runs the checks, commits
+# the release, creates the tag, and asks before pushing.
+#
+#   ./bin/release
+#
+# Pushing the tag is what triggers the GitHub Release, crates.io publish, and
+# Fly deploy workflows.
+
+set -euo pipefail
+
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+manifest=place/Cargo.toml
+deploy_doc=DEPLOY.md
+
+die() {
+  printf 'release: %s\n' "$*" >&2
+  exit 1
+}
+
+usage() {
+  cat <<'EOF'
+Usage: ./bin/release
+
+Interactively cut a release: choose a version, update the manifest and docs,
+run the tests, commit, tag, and optionally push.
+
+Environment:
+  RELEASE_BRANCH   branch to release from (default: main)
+EOF
+}
+
+case "${1:-}" in
+  -h|--help)
+    usage
+    exit 0
+    ;;
+  '')
+    ;;
+  *)
+    usage >&2
+    exit 2
+    ;;
+esac
+
+current=$(sed -n 's/^version = "\(.*\)"/\1/p' "$manifest" | head -n 1)
+[[ -n "$current" ]] || die "could not read the version from $manifest"
+
+# If the current version has not been tagged yet, offer to release it as-is;
+# otherwise suggest the next patch version.
+if git rev-parse -q --verify "refs/tags/v$current" >/dev/null; then
+  suggested=$(printf '%s' "$current" | awk -F. '{ printf "%s.%s.%d\n", $1, $2, $3 + 1 }')
+else
+  suggested=$current
+fi
+branch=${RELEASE_BRANCH:-main}
+actual_branch=$(git rev-parse --abbrev-ref HEAD)
+
+printf 'Current version: %s\n' "$current"
+read -r -p "New version [$suggested] (blank = $suggested): " next
+next=${next:-$suggested}
+next=${next#v}
+
+[[ "$next" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "version must look like 1.2.3"
+[[ "$actual_branch" == "$branch" ]] || die "release from '$branch' (currently on '$actual_branch')"
+
+version_gt() {
+  local a1 a2 a3 b1 b2 b3
+  IFS=. read -r a1 a2 a3 <<< "$1"
+  IFS=. read -r b1 b2 b3 <<< "$2"
+  if (( a1 != b1 )); then (( a1 > b1 )); return; fi
+  if (( a2 != b2 )); then (( a2 > b2 )); return; fi
+  (( a3 > b3 ))
+}
+
+if [[ "$next" != "$current" ]] && ! version_gt "$next" "$current"; then
+  die "new version $next must be greater than current version $current"
+fi
+
+if git rev-parse -q --verify "refs/tags/v$next" >/dev/null; then
+  die "tag v$next already exists"
+fi
+
+printf '\n'
+if [[ "$next" == "$current" ]]; then
+  printf 'Releasing the current version: v%s\n' "$current"
+else
+  printf 'Bumping %s -> %s\n' "$current" "$next"
+fi
+printf 'Branch: %s\n' "$actual_branch"
+printf 'HEAD:   %s\n' "$(git rev-parse --short HEAD)"
+
+if [[ -n "$(git status --porcelain)" ]]; then
+  printf '\nThese working-tree changes will be included in the release commit:\n'
+  git status --short
+else
+  printf '\nWorking tree is clean.\n'
+fi
+
+if [[ -f CHANGELOG.md ]] && ! grep -q "^## $next$" CHANGELOG.md; then
+  printf '\nWarning: CHANGELOG.md has no "## %s" section.\n' "$next"
+fi
+
+cat <<EOF
+
+The script will:
+  1. update $manifest, place/Cargo.lock, and $deploy_doc
+  2. run: make check
+  3. run: cargo publish --dry-run
+  4. commit everything as "Release $next"
+  5. create tag v$next
+  6. ask before pushing (push triggers release + deploy)
+
+EOF
+
+read -r -p "Continue? [y/N] " answer
+case "$answer" in
+  y|Y|yes|YES) ;;
+  *) printf 'Aborted.\n'; exit 0 ;;
+esac
+
+if [[ "$next" != "$current" ]]; then
+  NEW_VERSION="$next" perl -0pi -e \
+    's/^(version = ")[^"]+(")/$1$ENV{NEW_VERSION}$2/m' "$manifest"
+  OLD_VERSION="$current" NEW_VERSION="$next" perl -pi -e \
+    's/v\Q$ENV{OLD_VERSION}\E/v$ENV{NEW_VERSION}/g' "$deploy_doc"
+fi
+
+cargo build --manifest-path "$manifest"
+
+printf '\nRunning checks...\n'
+make check
+
+printf '\nChecking the crate package...\n'
+cargo publish --dry-run --allow-dirty --manifest-path "$manifest"
+
+if [[ -n "$(git status --porcelain)" ]]; then
+  git add -A
+  git commit -m "Release $next"
+else
+  printf '\nNo file changes to commit; tagging the current HEAD.\n'
+fi
+
+git tag -a "v$next" -m "Release $next"
+
+printf '\nLocal release v%s is ready.\n' "$next"
+read -r -p "Push $actual_branch and v$next now? This publishes and deploys. [y/N] " push
+case "$push" in
+  y|Y|yes|YES)
+    git push origin "$actual_branch"
+    git push origin "v$next"
+    printf '\nReleased v%s. The tag push runs the release, publish, and deploy workflows.\n' "$next"
+    ;;
+  *)
+    printf '\nNot pushed. When ready:\n'
+    printf '  git push origin %s\n' "$actual_branch"
+    printf '  git push origin v%s\n' "$next"
+    ;;
+esac
