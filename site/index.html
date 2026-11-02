@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>place — the wild west</title>
   <style>
-    :root { color-scheme: dark; }
+    :root { color-scheme: dark; --cell-aspect: 1.75; }
     body {
       margin: 0; min-height: 100vh; display: flex; flex-direction: column;
       align-items: center; gap: 12px; background: #0d0d10; color: #ddd;
@@ -15,9 +15,11 @@
     h1 { margin: 0; font-size: 18px; letter-spacing: .5px; }
     header p { margin: 4px 0 0; color: #888; }
     #map {
-      width: min(92vmin, 720px); aspect-ratio: 1; image-rendering: pixelated;
+      width: min(92vw, calc(80vh / var(--cell-aspect)), 720px);
+      height: auto; aspect-ratio: 1 / var(--cell-aspect);
+      image-rendering: pixelated;
       border: 1px solid #333; background: #e5e5e5;
-      image-rendering: pixelated; cursor: crosshair;
+      cursor: crosshair;
       touch-action: none;           /* gestures on the map are ours, not the browser's */
       -webkit-user-select: none; user-select: none;
     }
@@ -61,6 +63,6 @@
     </details>
     · <a href="https://crates.io/crates/place-tui" target="_blank" rel="noopener">crates.io</a>
   </footer>
-  <script src="viewer.js?v=4"></script>
+  <script src="viewer.js?v=5"></script>
 </body>
 </html>

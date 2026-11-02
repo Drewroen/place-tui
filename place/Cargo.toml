@@ -1,6 +1,6 @@
 [package]
 name = "place-tui"
-version = "0.0.4"
+version = "0.0.5"
 edition = "2021"
 description = "Terminal client for a shared place / world map server"
 license = "MIT"
@@ -15,7 +15,10 @@ name = "place"
 path = "src/main.rs"
 
 [dependencies]
-tungstenite = { version = "0.24", features = ["native-tls"] }
+tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
+# tungstenite enables rustls without a crypto provider; use ring explicitly so
+# wss:// works (and avoid the OpenSSL dependency that native-tls needed).
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 serde_json = "1"
 crossterm = "0.28"
 

@@ -693,8 +693,8 @@ fn set_read_timeout(socket: &mut Socket) {
         MaybeTlsStream::Plain(s) => {
             let _ = s.set_read_timeout(timeout);
         }
-        MaybeTlsStream::NativeTls(s) => {
-            let _ = s.get_ref().set_read_timeout(timeout);
+        MaybeTlsStream::Rustls(s) => {
+            let _ = s.sock.set_read_timeout(timeout);
         }
         _ => {}
     }

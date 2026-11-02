@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.0.5
+
+### Fixed
+
+- The release workflow now creates the GitHub Release before the binary jobs
+  upload assets. Previously every binary upload failed with `release not found`.
+- Updated the macOS build runners to the current `macos-15` and
+  `macos-15-intel` labels.
+- Replaced `native-tls`/OpenSSL with `rustls` + `ring`, so the Linux musl
+  cross-build no longer needs an OpenSSL installation.
+
+### Changed
+
+- The web map now renders tiles taller than they are wide to approximate a
+  terminal cell. The default aspect is 1.75; override it with `?aspect=2`, for
+  example, to match your terminal font.
+
+### Compatibility
+
+- Same client/server protocol as 0.0.4.
+
 ## 0.0.4
 
 ### Added

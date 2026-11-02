@@ -54,7 +54,7 @@ nothing breaks before setup.
 
 That's it — push a `v*` tag and it ships.
 
-The `0.0.4` client requires a `0.0.4`-or-newer server: move messages can now
+The `0.0.4+` client requires a `0.0.4`-or-newer server: move messages can now
 carry a brush color so tiles are painted as you walk. Deploy the server and
 client from the same tag.
 
@@ -115,8 +115,8 @@ The manual equivalent is pushing a version tag whose version matches
 
 ```bash
 # bump `version` in place/Cargo.toml first, then:
-git tag v0.0.4
-git push origin v0.0.4
+git tag v0.0.5
+git push origin v0.0.5
 ```
 
 `.github/workflows/publish.yml` runs `cargo publish` on `v*` tags, so the crate

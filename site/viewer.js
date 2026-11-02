@@ -18,6 +18,16 @@ const SERVER = params.get('server') || DEFAULT_SERVER;
 // Watch rather than play: no spawn point, no avatar, not counted as a player.
 const WS_URL = SERVER.includes('?') ? `${SERVER}&viewer` : `${SERVER}?viewer`;
 
+// Terminal cells are taller than they are wide, so the web map stretches each
+// tile vertically. The exact ratio depends on the terminal font; override it
+// with ?aspect=2.0, for example, to match your own cell shape.
+const DEFAULT_CELL_ASPECT = 1.75;
+const requestedAspect = Number.parseFloat(params.get('aspect') || '');
+const CELL_ASPECT = Number.isFinite(requestedAspect) && requestedAspect > 0
+  ? Math.min(Math.max(requestedAspect, 0.5), 4)
+  : DEFAULT_CELL_ASPECT;
+document.documentElement.style.setProperty('--cell-aspect', String(CELL_ASPECT));
+
 // Standard 16-color ANSI palette (xterm values), keyed by SGR fg code — the
 // same codes the server's palette is built from.
 const ANSI = {
