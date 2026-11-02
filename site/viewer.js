@@ -51,7 +51,7 @@ const offCtx = off.getContext('2d');
 
 // view.zoom is tile width in CSS pixels. Tile height is zoom * CELL_ASPECT.
 // cx/cy are the world tile coordinates at the center of the screen.
-const DEFAULT_TILE_WIDTH = 12;
+const DEFAULT_TILE_WIDTH = 6;
 const MAX_TILE_WIDTH = 48;
 const view = { cx: 0, cy: 0, zoom: DEFAULT_TILE_WIDTH };
 let screenW = 1;
@@ -399,13 +399,30 @@ function endPointer(e) {
 canvas.addEventListener('pointerup', endPointer);
 canvas.addEventListener('pointercancel', endPointer);
 
-// ---- install panel ---------------------------------------------------------
+// ---- play modal ------------------------------------------------------------
+
+const playLink = document.getElementById('play');
+const playModal = document.getElementById('play-modal');
+if (playLink && playModal) {
+  playLink.addEventListener('click', () => {
+    if (typeof playModal.showModal === 'function') {
+      playModal.showModal();
+    } else {
+      playModal.setAttribute('open', '');
+    }
+  });
+  // Close when clicking the backdrop rather than the dialog content.
+  playModal.addEventListener('click', (e) => {
+    if (e.target === playModal) playModal.close();
+  });
+}
+
 // Click-to-copy the install command. The clipboard API needs a secure context;
 // when it's unavailable (testing over plain http, etc.) select the text instead
 // so the usual Cmd/Ctrl-C works.
 
 const copyBtn = document.getElementById('copy');
-const installCode = document.querySelector('#install code');
+const installCode = document.getElementById('install-command');
 if (copyBtn && installCode) {
   copyBtn.addEventListener('click', async () => {
     const cmd = installCode.textContent.trim();

@@ -4,12 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>place — the wild west</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Victor+Mono:ital,wght@0,400;0,600;0,700&display=swap" rel="stylesheet">
   <style>
     :root { color-scheme: dark; }
     html, body { height: 100%; }
     body {
       margin: 0; overflow: hidden; background: #0d0d10; color: #ddd;
-      font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font: 14px/1.5 'Victor Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     }
     #map {
       position: fixed; inset: 0; display: block;
@@ -37,28 +40,59 @@
     h1 { margin: 0; font-size: 16px; letter-spacing: .5px; }
     footer b { color: #ddd; font-weight: 600; }
     footer a { color: #9ab; }
-    .hint { color: #666; border-left: 1px solid #333; padding-left: 8px; }
-    #install { display: inline-block; }
-    #install summary { cursor: pointer; color: #9ab; list-style: none; }
-    #install summary::marker, #install summary::-webkit-details-marker { display: none; }
-    #install summary:hover { color: #cde; }
-    #install summary code { color: #ddd; }
-    #install code {
-      display: inline-block; background: #0d0d10; padding: 5px 8px;
-      border-radius: 4px; margin: 6px 6px 0 0;
+    #play {
+      background: none; border: 0; padding: 0; margin: 0;
+      color: #9ab; font: inherit; cursor: pointer;
     }
+    #play:hover { color: #cde; text-decoration: underline; }
+    #status.live { color: #6ec06e; }
+    #status.down { color: #e06c6c; }
+
+    dialog {
+      position: relative; box-sizing: border-box;
+      width: min(92vw, 540px); max-height: min(86vh, 640px); overflow: auto;
+      border: 1px solid #3a3a42; border-radius: 10px;
+      padding: 24px; background: #16161a; color: #ddd;
+      box-shadow: 0 20px 80px rgba(0, 0, 0, .65);
+    }
+    dialog::backdrop {
+      background: rgba(0, 0, 0, .68);
+      -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+    }
+    dialog h2 { margin: 0 0 10px; font-size: 20px; }
+    dialog p { margin: 10px 0; color: #aaa; }
+    dialog code {
+      background: #0d0d10; border-radius: 4px; padding: 2px 5px; color: #ddd;
+    }
+    dialog pre {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      background: #0d0d10; border: 1px solid #333; border-radius: 6px;
+      padding: 10px 12px; margin: 12px 0;
+    }
+    dialog pre code { background: none; padding: 0; }
+    dialog ul { margin: 10px 0; padding-left: 20px; color: #aaa; }
+    dialog li { margin: 4px 0; }
+    dialog kbd {
+      background: #24242b; border: 1px solid #3a3a42; border-bottom-width: 2px;
+      border-radius: 4px; padding: 1px 5px; color: #ddd; font: inherit; font-size: 12px;
+    }
+    dialog a { color: #9ab; }
+    #close-play {
+      position: absolute; top: 10px; right: 12px;
+      background: none; border: 0; color: #888; font-size: 22px;
+      line-height: 1; cursor: pointer;
+    }
+    #close-play:hover { color: #ddd; }
     #copy {
       background: #24242b; color: #ddd; border: 1px solid #3a3a42;
       border-radius: 4px; padding: 3px 10px; cursor: pointer; font: inherit;
     }
     #copy:hover { background: #2e2e36; }
-    #status.live { color: #6ec06e; }
-    #status.down { color: #e06c6c; }
 
     @media (max-width: 620px) {
       header, footer { padding: 7px 10px; }
       h1 { font-size: 14px; }
-      .hint { display: none; }
+      dialog { padding: 18px; }
     }
   </style>
 </head>
@@ -73,14 +107,33 @@
     <b id="status">connecting…</b>
     <span>·</span>
     <span id="count"></span>
-    <span class="hint">drag to pan · scroll to zoom</span>
-    <details id="install">
-      <summary>install <code>place</code> ↵</summary>
-      <code>cargo install place-tui</code><button id="copy" type="button">copy</button>
-    </details>
-    <a href="https://crates.io/crates/place-tui" target="_blank" rel="noopener">crates.io</a>
+    <span>·</span>
+    <button id="play" type="button">play now</button>
   </footer>
 
-  <script src="viewer.js?v=6"></script>
+  <dialog id="play-modal">
+    <form method="dialog">
+      <button id="close-play" type="submit" aria-label="Close">×</button>
+    </form>
+    <h2>play in your terminal</h2>
+    <p>
+      This page is the live map. To move around and paint, install the
+      <code>place</code> client and run it in your terminal.
+    </p>
+    <pre><code id="install-command">cargo install place-tui</code><button id="copy" type="button">copy</button></pre>
+    <p>Then run <code>place</code>. It connects to the public server by default.</p>
+    <ul>
+      <li><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> / <kbd>wasd</kbd> — move</li>
+      <li><kbd>space</kbd> — open the color picker</li>
+      <li><kbd>enter</kbd> — choose the highlighted color</li>
+      <li><kbd>q</kbd> / <kbd>esc</kbd> — quit</li>
+    </ul>
+    <p>Once you choose a brush, every tile you step onto is painted with it.</p>
+    <p>
+      <a href="https://crates.io/crates/place-tui" target="_blank" rel="noopener">view on crates.io</a>
+    </p>
+  </dialog>
+
+  <script src="viewer.js?v=8"></script>
 </body>
 </html>
