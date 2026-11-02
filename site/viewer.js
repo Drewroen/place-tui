@@ -51,7 +51,7 @@ const offCtx = off.getContext('2d');
 
 // view.zoom is tile width in CSS pixels. Tile height is zoom * CELL_ASPECT.
 // cx/cy are the world tile coordinates at the center of the screen.
-const DEFAULT_TILE_WIDTH = 6;
+const DEFAULT_TILE_WIDTH = 2;
 const MAX_TILE_WIDTH = 48;
 const view = { cx: 0, cy: 0, zoom: DEFAULT_TILE_WIDTH };
 let screenW = 1;
