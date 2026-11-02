@@ -13,9 +13,10 @@
 
 ### Changed
 
-- The web map now renders tiles taller than they are wide to approximate a
-  terminal cell. The default aspect is 1.75; override it with `?aspect=2`, for
-  example, to match your terminal font.
+- The web map now fills the viewport, wraps infinitely, and supports drag-to-pan
+  plus wheel/pinch zoom, with fixed title and stats overlays. Tiles default to a
+  terminal-like 1.75:1 aspect ratio; override it with `?aspect=2`, for example,
+  to match your terminal font.
 
 ### Compatibility
 
