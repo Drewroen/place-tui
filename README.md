@@ -39,6 +39,28 @@ PLACE_SERVER=ws://localhost:8090 place
 Run two or more `place` clients (different terminals, or on different machines)
 to see each other move and paint.
 
+### Play while Claude works
+
+`mods/claude` is a Claude Code mod: it drops the game into a tmux pane while
+Claude Code is answering a prompt, so the wait is time on the map instead of a
+spinner. It runs the real client, so nothing about the game changes.
+
+```bash
+claude --plugin-dir mods/claude   # needs tmux 3.1+ and Claude Code 2.1.287+
+```
+
+Or install it from this repository's marketplace, which keeps it updated:
+
+```bash
+claude plugin marketplace add Drewroen/place-tui
+claude plugin install place-tui@place
+```
+
+Arrow keys or `wasd` to walk, `space` for the color picker, `q` or `esc` to
+leave. Submit a prompt and the pane appears; the answer closes it again.
+[`mods/claude/README.md`](mods/claude/README.md) covers `/place` and the
+`PLACE_MOD_*` settings.
+
 ### Run your own server
 
 ```bash

@@ -1,0 +1,17 @@
+{
+  "name": "place",
+  "description": "The place plugin: play on the shared map while Claude Code works",
+  "owner": {
+    "name": "Drew Roen",
+    "url": "https://github.com/Drewroen"
+  },
+  "plugins": [
+    {
+      "name": "place-tui",
+      "source": "./mods/claude",
+      "description": "Opens the place map in a tmux pane while Claude works, and closes it when the answer arrives",
+      "homepage": "https://place-tui.fly.dev",
+      "keywords": ["place", "game", "tmux", "waiting"]
+    }
+  ]
+}

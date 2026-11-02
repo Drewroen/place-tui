@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- A Claude Code mod in `mods/claude`: submit a prompt in Claude Code and the
+  `place` client opens in a tmux pane to play while Claude works, then closes
+  when the answer arrives. `/place` opens or closes it by hand; `PLACE_MOD_*`
+  environment variables choose the client, server, split size, focus, and
+  whether the game stays open after the answer.
+- The repository is also a Claude Code plugin marketplace, so the mod installs
+  with `claude plugin install place-tui@place`.
+
 ## 0.0.5
 
 ### Fixed

@@ -1,0 +1,11 @@
+{
+  "name": "place-tui",
+  "displayName": "place",
+  "version": "0.1.0",
+  "description": "Opens the place map in a tmux pane while Claude works, so you can paint while you wait",
+  "author": { "name": "Drew Roen" },
+  "homepage": "https://place-tui.fly.dev",
+  "repository": "https://github.com/Drewroen/place-tui",
+  "license": "MIT",
+  "keywords": ["place", "game", "tmux", "waiting", "mod"]
+}

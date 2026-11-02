@@ -1,0 +1,4 @@
+{
+  "description": "The place mod: a tmux pane with the place client while Claude works",
+  "modules": ["./register.js"]
+}
