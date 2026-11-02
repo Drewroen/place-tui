@@ -19,7 +19,14 @@ you walk and reconnects all behave exactly as they do in a terminal.
 
 ## Install
 
-From a checkout of this repository, install `mods/pi` as a Pi package:
+Install the package straight from this repository — the root `package.json`
+declares the extension under its `pi` key:
+
+```bash
+pi install git:github.com/Drewroen/place-tui
+```
+
+From a checkout of this repository, install the `mods/pi` subdirectory instead:
 
 ```bash
 pi install ./mods/pi

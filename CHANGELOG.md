@@ -12,8 +12,9 @@
 - The repository is also a Claude Code plugin marketplace, so the mod installs
   with `claude plugin install place-tui@place`.
 - A Pi extension in `mods/pi`, with the same behavior for the Pi coding agent:
-  the pane opens when a run starts and closes when Pi settles. Install it with
-  `pi install ./mods/pi`.
+  the pane opens when a run starts and closes when Pi settles. The repository is
+  also a Pi package, so `pi install git:github.com/Drewroen/place-tui` installs
+  it.
 
 ## 0.0.5
 

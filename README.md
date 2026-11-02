@@ -66,8 +66,11 @@ leave. Submit a prompt and the pane appears; the answer closes it again.
 [Pi](https://pi.dev) gets the same thing as an extension, from `mods/pi`:
 
 ```bash
-pi install ./mods/pi      # or: pi -e mods/pi/place.ts, or copy it to ~/.pi/agent/extensions/
+pi install git:github.com/Drewroen/place-tui
 ```
+
+Or load it without installing: `pi -e mods/pi/place.ts`, or copy that file to
+`~/.pi/agent/extensions/`.
 
 The pane opens when a run starts and closes when Pi settles, with the same keys
 and the same `PLACE_MOD_*` settings. See
