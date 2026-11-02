@@ -2,9 +2,9 @@
 //!
 //! Connects to a `world-server`, draws a camera view of the wrapping 1024x1024
 //! tile map (each tile is a single colored character cell), spawns you on a
-//! random tile, and lets you walk with the arrow keys and repaint the tile under
-//! you with the spacebar. You're a bold white dot; other players are bold green
-//! dots.
+//! random tile, and lets you walk with the arrow keys. Space opens a color
+//! picker; once you choose a brush, every tile you walk onto is painted with it.
+//! You're a bold white dot; other players are bold green dots.
 //!
 //! Install:
 //!   cargo install place-tui                # from crates.io
@@ -71,9 +71,10 @@ Environment:
   PLACE_SERVER   default server URL
 
 Controls:
-  arrows / wasd   move around the map (wraps at the edges)
-  space           cycle the color of the tile you're standing on
-  q / esc         quit
+  arrows / wasd   move around the map, or the color picker
+  space           open the color picker
+  enter           choose the highlighted color (paints the tile you're on)
+  q / esc         close the picker, or quit
 "#
 }
 
@@ -153,6 +154,11 @@ struct App {
     pending_moves: VecDeque<(i32, i32)>,
     /// Space was pressed while moves were pending; paint once they settle.
     paint_queued: bool,
+    /// The color chosen from the picker. Every tile stepped onto is painted
+    /// with it until another color is chosen.
+    brush: Option<usize>,
+    /// Highlighted palette index while the color picker is open.
+    picker: Option<usize>,
 }
 
 impl App {
@@ -172,6 +178,57 @@ impl App {
             dirty: true,
             pending_moves: VecDeque::new(),
             paint_queued: false,
+            brush: None,
+            picker: None,
+        }
+    }
+
+    /// Open the picker on the current brush, or on the tile underfoot when no
+    /// brush has been chosen yet.
+    fn open_picker(&mut self) {
+        if self.palette.is_empty() {
+            return;
+        }
+        let selected = self
+            .brush
+            .or_else(|| self.tile(self.x, self.y).map(|c| c as usize))
+            .unwrap_or(0)
+            .min(self.palette.len() - 1);
+        self.picker = Some(selected);
+        self.dirty = true;
+    }
+
+    fn close_picker(&mut self) {
+        self.picker = None;
+        self.dirty = true;
+    }
+
+    /// Move the picker highlight around its grid.
+    fn move_picker(&mut self, dx: i32, dy: i32) {
+        let Some(selected) = self.picker else {
+            return;
+        };
+        let count = self.palette.len();
+        if count == 0 {
+            return;
+        }
+        let columns = picker_columns(self);
+        let next = if dx < 0 {
+            (selected + count - 1) % count
+        } else if dx > 0 {
+            (selected + 1) % count
+        } else if dy < 0 {
+            selected.saturating_sub(columns)
+        } else if dy > 0 {
+            let below = selected + columns;
+            if below < count { below } else { selected }
+        } else {
+            selected
+        };
+        let next = next.min(count - 1);
+        if next != selected {
+            self.picker = Some(next);
+            self.dirty = true;
         }
     }
 
@@ -304,6 +361,12 @@ impl App {
         self.ready = true;
         self.pending_moves.clear();
         self.paint_queued = false;
+        if self.picker.map_or(false, |i| i >= self.palette.len()) {
+            self.picker = self.palette.len().checked_sub(1);
+        }
+        if self.brush.map_or(false, |i| i >= self.palette.len()) {
+            self.brush = None;
+        }
         self.dirty = true;
     }
 
@@ -352,6 +415,134 @@ fn write_frame(frame: &str) -> io::Result<()> {
     let mut out = stdout.lock();
     out.write_all(frame.as_bytes())?;
     out.flush()
+}
+
+const PICKER_BLOCK_WIDTH: usize = 6;
+const PICKER_BLOCK_HEIGHT: usize = 3;
+const PICKER_GAP: usize = 1;
+const PICKER_PADDING: usize = 1;
+const PICKER_MAX_COLUMNS: usize = 4;
+
+fn picker_panel_width(columns: usize) -> usize {
+    columns * PICKER_BLOCK_WIDTH
+        + columns.saturating_sub(1) * PICKER_GAP
+        + PICKER_PADDING * 2
+}
+
+/// Lay the picker out in as many columns of color blocks as fit.
+fn picker_columns(app: &App) -> usize {
+    let term_cols = terminal::size().map(|(c, _)| c as usize).unwrap_or(80);
+    let max_by_width = (term_cols.saturating_sub(PICKER_PADDING * 2) + PICKER_GAP)
+        / (PICKER_BLOCK_WIDTH + PICKER_GAP);
+    max_by_width
+        .clamp(1, PICKER_MAX_COLUMNS)
+        .min(app.palette.len().max(1))
+}
+
+/// Top-left cell of a color block inside the picker grid.
+fn picker_block_origin(index: usize, columns: usize) -> (usize, usize) {
+    (
+        PICKER_PADDING + (index % columns) * (PICKER_BLOCK_WIDTH + PICKER_GAP),
+        PICKER_PADDING + (index / columns) * (PICKER_BLOCK_HEIGHT + PICKER_GAP),
+    )
+}
+
+/// The border cell for the selected block at (x, y). The border is drawn just
+/// outside the colored swatch, in the one-cell gap around it.
+fn picker_border(index: usize, columns: usize, x: usize, y: usize) -> Option<char> {
+    let (bx, by) = picker_block_origin(index, columns);
+    let left = bx - 1;
+    let right = bx + PICKER_BLOCK_WIDTH;
+    let bottom = by + PICKER_BLOCK_HEIGHT;
+
+    if y + 1 == by {
+        if x == left {
+            Some('┏')
+        } else if x == right {
+            Some('┓')
+        } else if x > left && x < right {
+            Some('━')
+        } else {
+            None
+        }
+    } else if y == bottom {
+        if x == left {
+            Some('┗')
+        } else if x == right {
+            Some('┛')
+        } else if x > left && x < right {
+            Some('━')
+        } else {
+            None
+        }
+    } else if y >= by && y < bottom && (x == left || x == right) {
+        Some('┃')
+    } else {
+        None
+    }
+}
+
+/// The palette index whose block covers (x, y), if any.
+fn picker_fill(count: usize, columns: usize, x: usize, y: usize) -> Option<usize> {
+    if x < PICKER_PADDING || y < PICKER_PADDING {
+        return None;
+    }
+    let rel_x = x - PICKER_PADDING;
+    let rel_y = y - PICKER_PADDING;
+    let stride_x = PICKER_BLOCK_WIDTH + PICKER_GAP;
+    let stride_y = PICKER_BLOCK_HEIGHT + PICKER_GAP;
+    if rel_x % stride_x >= PICKER_BLOCK_WIDTH || rel_y % stride_y >= PICKER_BLOCK_HEIGHT {
+        return None;
+    }
+    let index = (rel_y / stride_y) * columns + rel_x / stride_x;
+    (index < count).then_some(index)
+}
+
+
+fn render_picker(app: &App, cols: u16, rows: u16) -> String {
+    let count = app.palette.len();
+    let selected = app.picker.unwrap_or(0);
+    let columns = picker_columns(app);
+    let grid_rows = (count + columns - 1) / columns;
+    let panel_width = picker_panel_width(columns);
+    let grid_height = PICKER_PADDING * 2
+        + grid_rows * PICKER_BLOCK_HEIGHT
+        + grid_rows.saturating_sub(1) * PICKER_GAP;
+    let total_height = grid_height + 2; // one blank row, then the help line
+    if count == 0 || panel_width > cols as usize || total_height > rows as usize {
+        return String::new();
+    }
+
+    let grid_left = ((cols as usize - panel_width) / 2) as u16 + 1;
+    let grid_top = ((rows as usize - total_height) / 2) as u16 + 1;
+    let mut out = String::new();
+
+    for gy in 0..grid_height {
+        let mut line = String::new();
+        for gx in 0..panel_width {
+            if let Some(ch) = picker_border(selected, columns, gx, gy) {
+                line.push_str("\x1b[0;1;97m");
+                line.push(ch);
+            } else if let Some(index) = picker_fill(count, columns, gx, gy) {
+                let bg = app.palette[index].fg as i32 + 10;
+                line.push_str(&format!("\x1b[0;{bg}m "));
+            } else {
+                line.push_str("\x1b[0m ");
+            }
+        }
+        line.push_str("\x1b[0m");
+        out.push_str(&format!("\x1b[{};{}H{}", grid_top + gy as u16, grid_left, line));
+    }
+
+    let help = "←→↑↓ choose   enter select   esc cancel";
+    let help: String = help.chars().take(cols as usize).collect();
+    let help_left = ((cols as usize - help.chars().count()) / 2) as u16 + 1;
+    let help_row = grid_top + grid_height as u16 + 1;
+    out.push_str(&format!(
+        "\x1b[{};{}H\x1b[0;2m {} \x1b[0m",
+        help_row, help_left, help
+    ));
+    out
 }
 
 /// A hung-up pty makes crossterm's event poll spin on EOF without returning,
@@ -457,16 +648,22 @@ fn render(app: &App) -> io::Result<()> {
     s.push_str("\x1b[0m\x1b[J");
     s.push_str(&format!("\x1b[{};1H", rows));
 
-    let color_name = app
+    let tile_name = app
         .tile(app.x, app.y)
         .and_then(|c| app.palette.get(c as usize))
         .map(|c| c.name.as_str())
         .unwrap_or("?");
+    let brush_name = app
+        .brush
+        .and_then(|c| app.palette.get(c))
+        .map(|c| c.name.as_str())
+        .unwrap_or("none");
     let bar = format!(
-        " place  ({}, {})  color: {}  players: {}  viewers: {}  |  arrows/wasd move  space paint  q quit ",
+        " place  ({}, {})  tile: {}  brush: {}  players: {}  viewers: {}  |  arrows/wasd move  space color  q quit ",
         app.x,
         app.y,
-        color_name,
+        tile_name,
+        brush_name,
         app.players.len() + 1,
         app.viewers,
     );
@@ -475,6 +672,10 @@ fn render(app: &App) -> io::Result<()> {
     s.push_str("\x1b[7m");
     s.push_str(&padded);
     s.push_str("\x1b[0m");
+
+    if app.picker.is_some() {
+        s.push_str(&render_picker(app, cols, rows));
+    }
 
     write_frame(&s)
 }
@@ -629,13 +830,24 @@ fn send_move(app: &mut App, dx: i32, dy: i32, out: &Sender<String>) {
     app.y = (app.y + dy).rem_euclid(app.height);
     app.dirty = true;
     app.pending_moves.push_back((dx, dy));
-    let _ = out.send(json!({ "type": "move", "dx": dx, "dy": dy }).to_string());
+
+    // When a brush is selected the move itself carries the color, so the server
+    // paints the destination tile as part of the move. It only broadcasts the
+    // tile when it actually changes, which keeps walking over old art cheap.
+    let message = match app.brush {
+        Some(color) => json!({ "type": "move", "dx": dx, "dy": dy, "color": color }),
+        None => json!({ "type": "move", "dx": dx, "dy": dy }),
+    };
+    let _ = out.send(message.to_string());
 }
 
 fn send_paint(app: &mut App, out: &Sender<String>) {
     if !app.ready {
         return;
     }
+    let Some(color) = app.brush else {
+        return;
+    };
     // The paint carries our coordinates, and the server only paints the tile it
     // believes we're on. If a move is still in flight our position isn't
     // settled yet, so paint as soon as it is.
@@ -644,8 +856,28 @@ fn send_paint(app: &mut App, out: &Sender<String>) {
         return;
     }
     app.paint_queued = false;
+    // Nothing to do when the tile is already the brush color.
+    if app.tile(app.x, app.y) == Some(color as u8) {
+        return;
+    }
     // Painting is server-authoritative too: the `tile` broadcast updates us.
-    let _ = out.send(json!({ "type": "paint", "x": app.x, "y": app.y }).to_string());
+    let _ = out.send(
+        json!({ "type": "paint", "x": app.x, "y": app.y, "color": color }).to_string(),
+    );
+}
+
+fn confirm_picker(app: &mut App, out: &Sender<String>) {
+    let Some(selected) = app.picker.take() else {
+        return;
+    };
+    if app.palette.is_empty() {
+        return;
+    }
+    app.brush = Some(selected.min(app.palette.len() - 1));
+    app.dirty = true;
+    // Paint the tile underfoot too, so choosing a brush does something even
+    // before the next step (and gives a way to recolor a single tile).
+    send_paint(app, out);
 }
 
 // ---- main ------------------------------------------------------------------
@@ -694,23 +926,54 @@ fn main() {
                     if key.kind == KeyEventKind::Press || key.kind == KeyEventKind::Repeat =>
                 {
                     match key.code {
-                        KeyCode::Char('q') | KeyCode::Esc => running = false,
                         KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                             running = false
                         }
+                        KeyCode::Char('q') | KeyCode::Esc => {
+                            if app.picker.is_some() {
+                                app.close_picker();
+                            } else {
+                                running = false;
+                            }
+                        }
+                        KeyCode::Enter => {
+                            if app.picker.is_some() {
+                                confirm_picker(&mut app, &out_tx);
+                            }
+                        }
                         KeyCode::Up | KeyCode::Char('w') | KeyCode::Char('k') => {
-                            send_move(&mut app, 0, -1, &out_tx)
+                            if app.picker.is_some() {
+                                app.move_picker(0, -1);
+                            } else {
+                                send_move(&mut app, 0, -1, &out_tx);
+                            }
                         }
                         KeyCode::Down | KeyCode::Char('s') | KeyCode::Char('j') => {
-                            send_move(&mut app, 0, 1, &out_tx)
+                            if app.picker.is_some() {
+                                app.move_picker(0, 1);
+                            } else {
+                                send_move(&mut app, 0, 1, &out_tx);
+                            }
                         }
                         KeyCode::Left | KeyCode::Char('a') | KeyCode::Char('h') => {
-                            send_move(&mut app, -1, 0, &out_tx)
+                            if app.picker.is_some() {
+                                app.move_picker(-1, 0);
+                            } else {
+                                send_move(&mut app, -1, 0, &out_tx);
+                            }
                         }
                         KeyCode::Right | KeyCode::Char('d') | KeyCode::Char('l') => {
-                            send_move(&mut app, 1, 0, &out_tx)
+                            if app.picker.is_some() {
+                                app.move_picker(1, 0);
+                            } else {
+                                send_move(&mut app, 1, 0, &out_tx);
+                            }
                         }
-                        KeyCode::Char(' ') => send_paint(&mut app, &out_tx),
+                        KeyCode::Char(' ') => {
+                            if app.picker.is_none() {
+                                app.open_picker();
+                            }
+                        }
                         _ => {}
                     }
                 }
@@ -806,5 +1069,50 @@ mod tests {
         let mut app = app_with_pending(&[(-1, -1)]);
         app.reconcile(0, 0);
         assert_eq!((app.x, app.y), (9, 9));
+    }
+
+    #[test]
+    fn picker_border_surrounds_the_selected_swatch() {
+        assert_eq!(picker_border(0, 4, 0, 0), Some('┏'));
+        assert_eq!(picker_border(0, 4, 3, 0), Some('━'));
+        assert_eq!(picker_border(0, 4, 7, 0), Some('┓'));
+        assert_eq!(picker_border(0, 4, 0, 2), Some('┃'));
+        assert_eq!(picker_border(0, 4, 7, 2), Some('┃'));
+        assert_eq!(picker_border(0, 4, 0, 4), Some('┗'));
+        assert_eq!(picker_border(0, 4, 7, 4), Some('┛'));
+        assert_eq!(picker_border(0, 4, 3, 2), None, "the fill stays untouched");
+        assert_eq!(picker_border(0, 4, 8, 2), None, "nothing outside the square");
+        assert_eq!(picker_border(1, 4, 8, 5), None, "only the selected block");
+    }
+
+    #[test]
+    fn picker_fill_maps_cells_to_palette_indexes() {
+        assert_eq!(picker_fill(12, 4, 1, 1), Some(0));
+        assert_eq!(picker_fill(12, 4, 6, 3), Some(0));
+        assert_eq!(picker_fill(12, 4, 7, 1), None, "column gap");
+        assert_eq!(picker_fill(12, 4, 8, 1), Some(1));
+        assert_eq!(picker_fill(12, 4, 22, 9), Some(11));
+        assert_eq!(picker_fill(12, 4, 28, 9), None, "right padding");
+    }
+
+    #[test]
+    fn picker_left_right_wraps_around_the_palette() {
+        let mut app = App::new(String::new());
+        app.palette = (0..3)
+            .map(|i| PaletteColor {
+                name: format!("color {i}"),
+                fg: 31 + i as u8,
+            })
+            .collect();
+        app.picker = Some(0);
+
+        app.move_picker(1, 0);
+        assert_eq!(app.picker, Some(1));
+        app.move_picker(-1, 0);
+        assert_eq!(app.picker, Some(0));
+        app.move_picker(-1, 0);
+        assert_eq!(app.picker, Some(2), "left from the first color wraps");
+        app.move_picker(1, 0);
+        assert_eq!(app.picker, Some(0), "right from the last color wraps");
     }
 }

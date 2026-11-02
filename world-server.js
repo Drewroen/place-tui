@@ -18,10 +18,15 @@
  * Protocol (JSON):
  *   connect:  ws://host/?viewer   // join as a viewer instead of a player
  *   client -> server:
- *     { type: "move",  dx, dy }   // dx/dy are -1, 0 or 1 (players only)
- *     { type: "paint", x, y }     // cycle the color of the tile you're standing on
- *                                 // (players only; x/y are optional, but when sent they
- *                                 // must match the server's position for this player)
+ *     { type: "move",  dx, dy, color? }
+ *                                 // dx/dy are -1, 0 or 1 (players only). When
+ *                                 // color is present, paint the tile moved onto
+ *                                 // with that palette index.
+ *     { type: "paint", x, y, color? }
+ *                                 // paint the tile you're standing on. color is
+ *                                 // optional (omit it for the historic cycle); x/y
+ *                                 // are optional too, but when sent they must match
+ *                                 // the server's position for this player.
  *   server -> client:
  *     { type: "init",  id, width, height, palette, rle, you, players, viewers }
  *                                   // "you" is present for players only
@@ -321,6 +326,19 @@ wss.on('connection', (ws, req) => {
         return;
       }
 
+      // A move may carry the painter's current brush color. Validating it here
+      // keeps malformed clients from writing garbage into the tile array.
+      let color;
+      if (msg.color !== undefined) {
+        if (!Number.isInteger(msg.color) || msg.color < 0 || msg.color >= COLORS) {
+          // Keep the one-reply-per-move invariant even when rejecting.
+          send(ws, { type: 'pos', id: player.id, x: player.x, y: player.y });
+          rejectAction(player, ws, 'Unknown color.');
+          return;
+        }
+        color = msg.color;
+      }
+
       const dx = Math.sign(Number(msg.dx) || 0);
       const dy = Math.sign(Number(msg.dy) || 0);
       const nx = wrap(player.x + dx, WIDTH);
@@ -330,6 +348,16 @@ wss.on('connection', (ws, req) => {
         player.y = ny;
         player.lastPaint = 0; // a fresh tile can be painted immediately
         broadcast({ type: 'pos', id: player.id, x: nx, y: ny });
+
+        // Auto-paint the tile we just landed on. This is part of the move, so
+        // it is covered by the move budget rather than the separate paint one.
+        if (color !== undefined) {
+          const i = player.y * WIDTH + player.x;
+          if (tiles[i] !== color) {
+            tiles[i] = color;
+            broadcast({ type: 'tile', x: player.x, y: player.y, color });
+          }
+        }
       } else {
         // A no-op move still gets an acknowledgement so the client's in-flight
         // move count drains. Every move message gets exactly one `pos` reply.
@@ -346,6 +374,20 @@ wss.on('connection', (ws, req) => {
         }
       }
 
+      const i = player.y * WIDTH + player.x;
+      let color;
+      if (msg.color !== undefined) {
+        if (!Number.isInteger(msg.color) || msg.color < 0 || msg.color >= COLORS) {
+          rejectAction(player, ws, 'Unknown color.');
+          return;
+        }
+        if (tiles[i] === msg.color) return; // already that color: nothing to do
+        color = msg.color;
+      } else {
+        // Legacy clients omit the color and still cycle through the palette.
+        color = (tiles[i] + 1) % COLORS;
+      }
+
       // Coalesce key repeat before spending a token: repainting the same tile
       // faster than this only flickers and multiplies broadcasts.
       const now = Date.now();
@@ -357,9 +399,8 @@ wss.on('connection', (ws, req) => {
       }
       player.lastPaint = now;
 
-      const i = player.y * WIDTH + player.x;
-      tiles[i] = (tiles[i] + 1) % COLORS;
-      broadcast({ type: 'tile', x: player.x, y: player.y, color: tiles[i] });
+      tiles[i] = color;
+      broadcast({ type: 'tile', x: player.x, y: player.y, color });
     }
   });
 

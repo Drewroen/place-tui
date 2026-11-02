@@ -41,7 +41,10 @@ function createClient(url) {
     const existing = messages.find(predicate);
     if (existing) return Promise.resolve(existing);
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('timed out waiting for a message')), timeout);
+      const timer = setTimeout(
+        () => reject(new Error(`timed out waiting for a message: ${predicate}`)),
+        timeout,
+      );
       waiters.push({ predicate, resolve, timer });
     });
   }
@@ -161,9 +164,24 @@ async function main() {
   pos = await alice.waitFor((m) => m.type === 'pos' && m.id === init.id);
   assert.equal(pos.y, 0, 'y moves down');
 
+  // ---- a move carrying a color paints the tile landed on ----
+  alice.clear();
+  bob.clear();
+  alice.send({ type: 'move', dx: 1, dy: 0, color: 8 });
+  pos = await alice.waitFor((m) => m.type === 'pos' && m.id === init.id && m.x === 1);
+  assert.equal(pos.x, 1, 'a painted move still moves');
+  let tile = await bob.waitFor((m) => m.type === 'tile' && m.x === 1 && m.y === 0);
+  assert.equal(tile.color, 8, 'the destination is painted with the requested color');
+
+  // walking back to white (0) over an already-white tile needs no tile message
+  alice.clear();
+  alice.send({ type: 'move', dx: -1, dy: 0, color: 0 });
+  pos = await alice.waitFor((m) => m.type === 'pos' && m.id === init.id && m.x === 0);
+  assert.equal(pos.x, 0, 'walks back to the origin');
+
   // ---- painting cycles through the palette and is broadcast ----
   alice.send({ type: 'paint', x: 0, y: 0 });
-  let tile = await bob.waitFor((m) => m.type === 'tile' && m.x === 0 && m.y === 0);
+  tile = await bob.waitFor((m) => m.type === 'tile' && m.x === 0 && m.y === 0);
   assert.equal(tile.color, 1, 'white -> red');
 
   alice.send({ type: 'paint', x: 0, y: 0 });
@@ -174,11 +192,35 @@ async function main() {
   for (let i = 0; i < 10; i++) alice.send({ type: 'paint', x: 0, y: 0 });
   await alice.waitFor((m) => m.type === 'tile' && m.x === 0 && m.y === 0 && m.color === 0);
 
+  // ---- a paint can ask for an exact palette color ----
+  alice.clear();
+  bob.clear();
+  alice.send({ type: 'paint', x: 0, y: 0, color: 8 });
+  tile = await bob.waitFor((m) => m.type === 'tile' && m.x === 0 && m.y === 0 && m.color === 8);
+  assert.equal(tile.color, 8, 'paint sets the exact color requested');
+
+  // ...but an out-of-range palette index is rejected. Use bob so this warning
+  // doesn't suppress the independent "paint where you stand" warning below.
+  bob.clear();
+  bob.send({ type: 'paint', color: 99 });
+  const badColor = await bob.waitFor((m) => m.type === 'error' && /color/i.test(m.text));
+  assert.match(badColor.text, /color/i, 'rejects an unknown color');
+  await new Promise((r) => setTimeout(r, 100));
+  assert.ok(
+    !bob.messages.some((m) => m.type === 'tile' && m.color === 99),
+    'an unknown color changes no tile',
+  );
+
+  // restore white so the late joiner's RLE check below still holds
+  alice.clear();
+  alice.send({ type: 'paint', x: 0, y: 0, color: 0 });
+  await alice.waitFor((m) => m.type === 'tile' && m.x === 0 && m.y === 0 && m.color === 0);
+
   // ---- paint coordinates must match where the server has you standing ----
   alice.clear();
   bob.clear();
   alice.send({ type: 'paint', x: 500, y: 500 });
-  const wrongTile = await alice.waitFor((m) => m.type === 'error');
+  const wrongTile = await alice.waitFor((m) => m.type === 'error' && /stand/i.test(m.text));
   assert.match(wrongTile.text, /stand/i, 'rejects a paint aimed somewhere else');
   await new Promise((r) => setTimeout(r, 100));
   assert.ok(
