@@ -15,9 +15,6 @@
   the pane opens when a run starts and closes when Pi settles. The repository is
   also a Pi package, so `pi install git:github.com/Drewroen/place-tui` installs
   it.
-- A Codex CLI hook set in `mods/codex`, with the same behavior through Codex's
-  lifecycle hooks: `UserPromptSubmit` opens the game, `Stop` closes it. It is a
-  shell script plus a `hooks.json`, since Codex hooks are plain commands.
 
 ## 0.0.5
 

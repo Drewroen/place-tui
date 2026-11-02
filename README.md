@@ -76,22 +76,6 @@ The pane opens when a run starts and closes when Pi settles, with the same keys
 and the same `PLACE_MOD_*` settings. See
 [`mods/pi/README.md`](mods/pi/README.md).
 
-### Play while Codex works
-
-`mods/codex` hooks the same behaviour into Codex CLI, which has no extension API
-but does have lifecycle hooks. A hook is a shell command, so this one is a small
-script:
-
-```bash
-mkdir -p ~/.codex/hooks
-cp mods/codex/place-pane.sh ~/.codex/hooks/
-cp mods/codex/hooks.json ~/.codex/hooks.json   # merge if you already have one
-```
-
-Then trust the entries once with `/hooks` inside Codex. `UserPromptSubmit` opens
-the game, `Stop` closes it. Codex filters a hook's environment, so settings go in
-`~/.codex/hooks/place-pane.env`; see [`mods/codex/README.md`](mods/codex/README.md).
-
 ### Run your own server
 
 ```bash
