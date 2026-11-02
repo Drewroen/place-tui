@@ -63,7 +63,8 @@ leave. Submit a prompt and the pane appears; the answer closes it again.
 
 ### Play while Pi works
 
-[Pi](https://pi.dev) gets the same thing as an extension, from `mods/pi`:
+[Pi](https://pi.dev) gets the same thing as an extension, from `mods/pi` — drawn
+inside Pi's own UI, so no tmux and no client binary:
 
 ```bash
 pi install git:github.com/Drewroen/place-tui
@@ -72,9 +73,9 @@ pi install git:github.com/Drewroen/place-tui
 Or load it without installing: `pi -e mods/pi/place.ts`, or copy that file to
 `~/.pi/agent/extensions/`.
 
-The pane opens when a run starts and closes when Pi settles, with the same keys
-and the same `PLACE_MOD_*` settings. See
-[`mods/pi/README.md`](mods/pi/README.md).
+Submit a prompt and the map takes the screen and the keyboard; `esc` or a settled
+run closes it. It speaks the same protocol as the client, so other players see you
+and you see them. See [`mods/pi/README.md`](mods/pi/README.md).
 
 ### Run your own server
 

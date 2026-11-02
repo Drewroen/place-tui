@@ -11,10 +11,11 @@
   whether the game stays open after the answer.
 - The repository is also a Claude Code plugin marketplace, so the mod installs
   with `claude plugin install place-tui@place`.
-- A Pi extension in `mods/pi`, with the same behavior for the Pi coding agent:
-  the pane opens when a run starts and closes when Pi settles. The repository is
-  also a Pi package, so `pi install git:github.com/Drewroen/place-tui` installs
-  it.
+- A Pi extension in `mods/pi` that draws the game inside Pi's own UI: the same
+  protocol, keys, colour picker and status bar as the client, reimplemented from
+  `place/src/main.rs`, with no tmux, no child process and no dependency. The
+  repository is also a Pi package, so `pi install
+  git:github.com/Drewroen/place-tui` installs it.
 
 ## 0.0.5
 

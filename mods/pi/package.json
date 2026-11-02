@@ -2,7 +2,7 @@
   "name": "place-pi",
   "version": "0.1.0",
   "private": true,
-  "description": "Play on the shared place map in a tmux pane while Pi works",
+  "description": "Play on the shared place map inside Pi's UI while Pi works",
   "pi": {
     "extensions": ["./place.ts"]
   }

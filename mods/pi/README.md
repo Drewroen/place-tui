@@ -1,21 +1,22 @@
 # place — a Pi extension
 
 A prompt is dead time: you send it, then watch it think. This extension hands
-that time back. When a run starts it splits the pane Pi runs in, starts the
-`place` client there, and you play on the shared map while Pi works. When the run
-settles the pane closes and you are back on the prompt.
+that time back. When a run starts it opens the shared map in Pi's own UI, so you
+can walk around and paint while Pi works; when the run settles it closes and you
+are back on the prompt.
 
-You are playing a real `place` client — same client, same server, same other
-players — not a redrawing of the map. Brush colors, key repeat, painting while
-you walk and reconnects all behave exactly as they do in a terminal.
+The game runs inside Pi: no second terminal, no tmux, no child process, no
+dependency. It speaks the same WebSocket protocol as the `place` client and draws
+the same picture — same camera, colours, keys, colour picker, status bar and
+prediction — from rules mirrored out of `place/src/main.rs`.
 
 ## Requirements
 
 - **Pi 1.x** (`@earendil-works/pi-coding-agent`), tested against 1.5.0
-- **tmux 3.1 or later**, with Pi started inside it. An extension has no terminal
-  of its own; tmux is what gives the game a pty.
-- The `place` command on your `PATH` (`cargo install place-tui`), or
-  `PLACE_MOD_BIN` pointing at a built client.
+- Pi's interactive UI (`ctx.ui`); print mode has nowhere to draw
+
+That is the whole list. There is no `place` binary to install: this talks to the
+server itself.
 
 ## Install
 
@@ -47,14 +48,13 @@ pi -e mods/pi/place.ts
 
 ## Use
 
-Submit any prompt. The pane splits below Pi and the game takes the keyboard:
-arrow keys or `wasd` to walk, `space` for the color picker, `q` or `esc` to
-leave. Pi's answer appears above while you play; when the run settles the pane
-closes by itself.
+Submit any prompt. The map takes the screen and the keyboard: arrow keys or
+`wasd` to walk, `space` for the colour picker, `enter` to choose a brush, `q` or
+`esc` to leave. Pi keeps working behind it; when the run settles the game closes
+by itself and the answer is there.
 
 `/place` opens the game any time, including while a run is going, and closes it
-again. `/place off` always closes it, which is handy when `PLACE_MOD_KEEP=1` is
-set.
+again. `/place off` closes it, which is handy when `PLACE_MOD_KEEP=1` is set.
 
 ## Settings
 
@@ -62,35 +62,40 @@ Everything is optional, read from the environment Pi runs in:
 
 | Variable | Default | What it does |
 | --- | --- | --- |
-| `PLACE_MOD_BIN` | `place` | The client to run, e.g. `./bin/place-local`. |
-| `PLACE_MOD_SERVER` | the client's own | Server to connect to, e.g. `ws://localhost:8090`. |
-| `PLACE_MOD_SIZE` | `40%` | Size of the split. |
-| `PLACE_MOD_FOCUS` | on | `0` leaves the keyboard on Pi's pane instead of the game. |
+| `PLACE_MOD_SERVER` | `wss://place-tui.fly.dev` | Server to connect to, e.g. `ws://localhost:8090`. |
 | `PLACE_MOD_KEEP` | off | `1` leaves the game open when the run settles. |
 
 Play against a server you run yourself:
 
 ```bash
-PLACE_MOD_SERVER=ws://localhost:8090 PLACE_MOD_BIN=./bin/place-local \
-  pi -e mods/pi/place.ts
+PLACE_MOD_SERVER=ws://localhost:8090 pi -e mods/pi/place.ts
 ```
 
 ## How it works
 
-`place.ts` is one extension module. It hangs on three events:
+`place.ts` is one extension module, in two halves.
 
-- `agent_start` — Pi began working on a run, so the extension splits Pi's pane
-  (`tmux split-window -t $TMUX_PANE`) and runs the client in it.
-- `agent_settled` — Pi is finally idle, so the pane closes. Not `agent_end`: that
-  one also fires before a retry, a compaction retry, or a queued follow-up, and
-  the game should stay up through those.
-- `session_shutdown` — leaving Pi closes the pane it opened, so a game is never
-  left running in a pane nobody owns.
+**The game** is pure functions over a state object — `applyFrame` decodes the
+server's frames (`init`, `tile`, `pos`, `join`, `leave`, `viewers`, `error`),
+`handleKey` maps a keystroke to the messages the client would send, `renderFrame`
+paints the viewport, picker and status bar. They follow the Rust client rule for
+rule: moves are predicted and then replayed over each `pos` reply, a paint waits
+while moves are in flight, the picker wraps left and right but stops at the ends,
+a chosen brush rides along on every move.
 
-The panes it opens carry the tmux user option `@place_mod`, which is how the
-extension finds the game again: tmux is the record of what is open, so a
-`/reload`, an aborted run, or a run that starts while the game is still up never
-stacks a second pane.
+**The shell** is Pi's side: `ctx.ui.custom()` with `overlay: true` gives the
+component the whole terminal and the keyboard, and `esc` hands both back. Three
+events drive it:
+
+- `agent_start` — Pi began working on a run, so the game opens.
+- `agent_settled` — Pi is finally idle, so it closes. Not `agent_end`: that one
+  also fires before a retry, a compaction retry, or a queued follow-up, and the
+  game should stay up through those.
+- `session_shutdown` — leaving Pi closes the game, so nothing is left connected.
+
+Tiles are drawn as full blocks in the palette colour rather than as background
+colour behind a space: Pi trims trailing space from a rendered line, which would
+erase any line that is one flat colour.
 
 ## Test
 
@@ -98,6 +103,6 @@ stacks a second pane.
 node --test mods/pi/place.test.ts
 ```
 
-The tests drive a private tmux server with a stand-in client: the split, the
-mark, reuse, `/place`, keep, and cleanup all run for real, and nothing touches
-the tmux you are sitting in.
+Thirty tests, no Pi and no server needed: the frame decoder, prediction, the paint
+queue, the picker layout, the key map and the rendered lines. They are the record
+of what must not drift from `place/src/main.rs`.
