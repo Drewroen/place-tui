@@ -11,6 +11,9 @@
   whether the game stays open after the answer.
 - The repository is also a Claude Code plugin marketplace, so the mod installs
   with `claude plugin install place-tui@place`.
+- A Pi extension in `mods/pi`, with the same behavior for the Pi coding agent:
+  the pane opens when a run starts and closes when Pi settles. Install it with
+  `pi install ./mods/pi`.
 
 ## 0.0.5
 

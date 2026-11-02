@@ -61,6 +61,18 @@ leave. Submit a prompt and the pane appears; the answer closes it again.
 [`mods/claude/README.md`](mods/claude/README.md) covers `/place` and the
 `PLACE_MOD_*` settings.
 
+### Play while Pi works
+
+[Pi](https://pi.dev) gets the same thing as an extension, from `mods/pi`:
+
+```bash
+pi install ./mods/pi      # or: pi -e mods/pi/place.ts, or copy it to ~/.pi/agent/extensions/
+```
+
+The pane opens when a run starts and closes when Pi settles, with the same keys
+and the same `PLACE_MOD_*` settings. See
+[`mods/pi/README.md`](mods/pi/README.md).
+
 ### Run your own server
 
 ```bash
