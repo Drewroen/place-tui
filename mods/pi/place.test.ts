@@ -328,6 +328,26 @@ test("the key map covers arrows, wasd, hjkl and the control keys", () => {
   assert.equal(decodeKey("z"), null);
 });
 
+test("the Kitty keyboard encodings decode the same way", () => {
+  // Pi turns the keyboard protocol on in terminals that support it, and then
+  // every key arrives as ESC [ codepoint (; modifiers) u.
+  assert.equal(decodeKey("\u001b[27u"), "esc", "escape");
+  assert.equal(decodeKey("\u001b[27;1u"), "esc", "escape with explicit modifiers");
+  assert.equal(decodeKey("\u001b[13u"), "enter");
+  assert.equal(decodeKey("\u001b[32u"), "space");
+  assert.equal(decodeKey("\u001b[119u"), "up", "letters arrive as codepoints, and w walks up");
+  assert.equal(decodeKey("\u001b[113u"), "esc", "q leaves");
+  assert.equal(decodeKey("\u001b[99;5u"), "ctrl-c", "ctrl+c");
+  assert.equal(decodeKey("\u001b[3;5u"), "ctrl-c", "…or the control character itself");
+  assert.equal(decodeKey("\u001b[108;5u"), null, "ctrl+something else is not ours");
+
+  // Arrows with parameters, which the protocol also allows.
+  assert.equal(decodeKey("\u001b[1;1A"), "up");
+  assert.equal(decodeKey("\u001b[1;1B"), "down");
+  assert.equal(decodeKey("\u001b[1;1C"), "right");
+  assert.equal(decodeKey("\u001b[1;1D"), "left");
+});
+
 test("escape closes the picker first and only then quits", () => {
   const state = started();
   openPicker(state);

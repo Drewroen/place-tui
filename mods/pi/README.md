@@ -57,6 +57,11 @@ the answer is there.
 `/place` opens the game any time, including while a run is going, and closes it
 again. `/place off` closes it, which is handy when `PLACE_MOD_KEEP=1` is set.
 
+Keystrokes are read as raw bytes and understood in both encodings a terminal may
+send: the legacy escapes (arrows as `ESC [ A`, escape as a bare `ESC`) and the
+Kitty keyboard protocol Pi switches on where it is available (`ESC [ 27 u` for
+escape, `ESC [ 1 ; 1 A` for arrows, letters as codepoints).
+
 ## Settings
 
 Everything is optional, read from the environment Pi runs in:

@@ -342,41 +342,93 @@ export function confirmPicker(state: GameState): ClientMessage | null {
 
 export type DecodedKey = "up" | "down" | "left" | "right" | "space" | "enter" | "esc" | "ctrl-c";
 
-/** The client's key handling, arrows also spelled `wasd` and `hjkl`. */
+const LETTER_KEYS: Record<string, DecodedKey> = {
+  w: "up",
+  k: "up",
+  s: "down",
+  j: "down",
+  a: "left",
+  h: "left",
+  d: "right",
+  l: "right",
+  q: "esc",
+};
+
+/** The letter a codepoint stands for, if it is one this game uses. */
+function letterKey(code: number): DecodedKey | null {
+  return LETTER_KEYS[String.fromCharCode(code)] ?? null;
+}
+
+/**
+ * The client's key handling — arrows also spelled `wasd` and `hjkl` — over every
+ * encoding a terminal may send.
+ *
+ * A key reaches a component as raw bytes, and which bytes depends on the terminal:
+ * the legacy escapes (arrows are `ESC [ A`, escape is a bare `ESC`), or Kitty's
+ * CSI-u form when Pi has the keyboard protocol on (`ESC [ 27 u` for escape,
+ * `ESC [ 119 u` for `w`), or CSI arrows with parameters (`ESC [ 1 ; 1 A`). All of
+ * them mean the same thing here, so all of them are understood; anything else is
+ * left for Pi.
+ */
 export function decodeKey(data: string): DecodedKey | null {
+  if (!data) return null;
+
+  // Kitty / CSI-u: ESC [ codepoint (; modifiers)? u
+  const csiU = /^\u001b\[(\d+)(?:;(\d+))?u$/.exec(data);
+  if (csiU) {
+    const code = Number(csiU[1]);
+    const mods = csiU[2] ? Number(csiU[2]) : 1;
+    const ctrl = (mods - 1 & 4) !== 0;
+    if (ctrl) return code === 99 || code === 3 ? "ctrl-c" : null;
+    if (code === 27) return "esc";
+    if (code === 13) return "enter";
+    if (code === 32) return "space";
+    return letterKey(code);
+  }
+
+  // CSI arrows, with or without parameters (ESC [ A, ESC [ 1 ; 1 A, ESC [ 1 A).
+  const csiArrow = /^\u001b\[[0-9;]*([ABCD])$/.exec(data);
+  if (csiArrow) {
+    switch (csiArrow[1]) {
+      case "A":
+        return "up";
+      case "B":
+        return "down";
+      case "C":
+        return "right";
+      default:
+        return "left";
+    }
+  }
+
+  // SS3 arrows, which some terminals send instead (ESC O A).
+  const ss3Arrow = /^\u001bO([ABCD])$/.exec(data);
+  if (ss3Arrow) {
+    switch (ss3Arrow[1]) {
+      case "A":
+        return "up";
+      case "B":
+        return "down";
+      case "C":
+        return "right";
+      default:
+        return "left";
+    }
+  }
+
   switch (data) {
-    case "\u001b[A":
-    case "\u001bOA":
-    case "w":
-    case "k":
-      return "up";
-    case "\u001b[B":
-    case "\u001bOB":
-    case "s":
-    case "j":
-      return "down";
-    case "\u001b[D":
-    case "\u001bOD":
-    case "a":
-    case "h":
-      return "left";
-    case "\u001b[C":
-    case "\u001bOC":
-    case "d":
-    case "l":
-      return "right";
     case " ":
       return "space";
     case "\r":
     case "\n":
       return "enter";
     case "\u001b":
-    case "q":
+    case "\u001b\u001b":
       return "esc";
     case "\u0003":
       return "ctrl-c";
     default:
-      return null;
+      return LETTER_KEYS[data] ?? null;
   }
 }
 
