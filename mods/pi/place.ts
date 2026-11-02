@@ -18,6 +18,19 @@
  * git:github.com/Drewroen/place-tui`, or run Pi with `pi -e mods/pi/place.ts`.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { appendFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
+/** With `PLACE_MOD_DEBUG=1`, every keystroke the game receives is appended here. */
+export function debugLog(line: string, env: Record<string, string | undefined> = process.env): void {
+  if (env.PLACE_MOD_DEBUG !== "1") return;
+  try {
+    appendFileSync(env.PLACE_MOD_DEBUG_FILE || join(homedir(), ".place-keys.log"), `${line}\n`);
+  } catch {
+    // A log that cannot be written is not worth a broken game.
+  }
+}
 
 /* ------------------------------------------------------------------ config -- */
 
@@ -849,12 +862,16 @@ async function openGame(ctx: GameContextLike, config: Config): Promise<void> {
         requestRender = () => tui.requestRender();
 
         return {
+          // In fullscreen mode the arrow keys belong to Pi's own viewport
+          // scrolling; a game that wants them has to say so.
+          capturesViewportInput: true,
           render(width: number): string[] {
             const share = parseSize(config.size) ?? 0.8;
             const rows = Math.max(3, Math.floor((tui?.terminal?.rows ?? 24) * share));
             return renderFrame(state, width, rows);
           },
           handleInput(data: string): void {
+            debugLog(JSON.stringify({ at: Date.now(), mode: tui?.mode, data }));
             const key = decodeKey(data);
             if (!key) return;
             const result = handleKey(state, key);
