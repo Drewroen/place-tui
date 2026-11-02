@@ -155,6 +155,9 @@ export function register(on) {
       name: 'place',
       description: 'Play on the shared place map while Claude works',
       argumentHint: '[off]',
+      // Opening the game mid-turn is the whole point: without this, a /place
+      // typed while Claude works waits for the turn to end.
+      immediate: true,
     });
     return next(e);
   });

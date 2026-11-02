@@ -45,8 +45,9 @@ arrow keys or `wasd` to walk, `space` for the color picker, `q` or `esc` to leav
 Claude's answer appears above while you play; when the turn ends the pane closes
 by itself.
 
-`/place` opens the game when Claude is idle, and closes it again. `/place off`
-always closes it, which is handy when `PLACE_MOD_KEEP=1` is set.
+`/place` opens the game any time, including while a turn is running, and closes
+it again. `/place off` always closes it, which is handy when `PLACE_MOD_KEEP=1`
+is set.
 
 ## Settings
 

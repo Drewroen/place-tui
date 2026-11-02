@@ -52,8 +52,9 @@ arrow keys or `wasd` to walk, `space` for the color picker, `q` or `esc` to
 leave. Pi's answer appears above while you play; when the run settles the pane
 closes by itself.
 
-`/place` opens the game when Pi is idle, and closes it again. `/place off` always
-closes it, which is handy when `PLACE_MOD_KEEP=1` is set.
+`/place` opens the game any time, including while a run is going, and closes it
+again. `/place off` always closes it, which is handy when `PLACE_MOD_KEEP=1` is
+set.
 
 ## Settings
 
