@@ -73,9 +73,9 @@ pi install git:github.com/Drewroen/place-tui
 Or load it without installing: `pi -e mods/pi/place.ts`, or copy that file to
 `~/.pi/agent/extensions/`.
 
-Submit a prompt and the map takes the screen and the keyboard; `esc` or a settled
-run closes it. It speaks the same protocol as the client, so other players see you
-and you see them. See [`mods/pi/README.md`](mods/pi/README.md).
+Submit a prompt and the map takes the middle of the page and the keyboard; `esc`
+or a settled run closes it. It speaks the same protocol as the client, so other
+players see you and you see them. See [`mods/pi/README.md`](mods/pi/README.md).
 
 ### Run your own server
 

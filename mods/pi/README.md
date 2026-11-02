@@ -48,10 +48,11 @@ pi -e mods/pi/place.ts
 
 ## Use
 
-Submit any prompt. The map takes the screen and the keyboard: arrow keys or
-`wasd` to walk, `space` for the colour picker, `enter` to choose a brush, `q` or
-`esc` to leave. Pi keeps working behind it; when the run settles the game closes
-by itself and the answer is there.
+Submit any prompt. The map takes the middle of the page and the keyboard — the
+transcript and prompt stay visible around it — with arrow keys or `wasd` to walk,
+`space` for the colour picker, `enter` to choose a brush, `q` or `esc` to leave.
+Pi keeps working behind it; when the run settles the game closes by itself and
+the answer is there.
 
 `/place` opens the game any time, including while a run is going, and closes it
 again. `/place off` closes it, which is handy when `PLACE_MOD_KEEP=1` is set.
@@ -63,6 +64,7 @@ Everything is optional, read from the environment Pi runs in:
 | Variable | Default | What it does |
 | --- | --- | --- |
 | `PLACE_MOD_SERVER` | `wss://place-tui.fly.dev` | Server to connect to, e.g. `ws://localhost:8090`. |
+| `PLACE_MOD_SIZE` | `80%` | Share of the screen the game box takes. The rest of the page stays visible. |
 | `PLACE_MOD_KEEP` | off | `1` leaves the game open when the run settles. |
 
 Play against a server you run yourself:
@@ -83,9 +85,9 @@ rule: moves are predicted and then replayed over each `pos` reply, a paint waits
 while moves are in flight, the picker wraps left and right but stops at the ends,
 a chosen brush rides along on every move.
 
-**The shell** is Pi's side: `ctx.ui.custom()` with `overlay: true` gives the
-component the whole terminal and the keyboard, and `esc` hands both back. Three
-events drive it:
+**The shell** is Pi's side: `ctx.ui.custom()` with `overlay: true` puts the game in
+a box in the middle of the page — `PLACE_MOD_SIZE`, 80% by default — with the
+keyboard, and `esc` hands both back. Three events drive it:
 
 - `agent_start` — Pi began working on a run, so the game opens.
 - `agent_settled` — Pi is finally idle, so it closes. Not `agent_end`: that one

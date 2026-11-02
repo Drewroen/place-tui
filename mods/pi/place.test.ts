@@ -22,6 +22,7 @@ import {
   newState,
   normalizeUrl,
   openPicker,
+  parseSize,
   pickerBorder,
   pickerFill,
   readConfig,
@@ -73,6 +74,19 @@ test("the server defaults to the public one and honours PLACE_MOD_SERVER", () =>
   );
   assert.equal(readConfig({ PLACE_MOD_KEEP: "1" }).keep, true);
   assert.equal(readConfig({}).keep, false);
+});
+
+test("the game takes a share of the screen, 80% by default", () => {
+  assert.equal(readConfig({}).size, "80%");
+  assert.equal(readConfig({ PLACE_MOD_SIZE: "50%" }).size, "50%");
+  assert.equal(readConfig({ PLACE_MOD_SIZE: "junk" }).size, "80%", "junk falls back");
+
+  assert.equal(parseSize("80%"), 0.8);
+  assert.equal(parseSize("60"), 0.6);
+  assert.equal(parseSize(0.5), 0.5);
+  assert.equal(parseSize("0"), null);
+  assert.equal(parseSize("nope"), null);
+  assert.equal(parseSize(undefined), null);
 });
 
 test("http(s) servers become ws(s) and get a path", () => {

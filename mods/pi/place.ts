@@ -27,13 +27,29 @@ export interface Config {
   server: string;
   /** Leave the game open when the run settles. */
   keep: boolean;
+  /**
+   * Share of the screen the game takes, as a percentage (`"80%"`). The rest of
+   * the page stays visible around it.
+   */
+  size: string;
 }
 
 export function readConfig(env: Record<string, string | undefined> = process.env): Config {
   return {
     server: env.PLACE_MOD_SERVER || env.PLACE_SERVER || DEFAULT_SERVER,
     keep: env.PLACE_MOD_KEEP === "1",
+    size: parseSize(env.PLACE_MOD_SIZE) === null ? "80%" : env.PLACE_MOD_SIZE!.trim(),
   };
+}
+
+/** `"80%"`, `"80"` and `80` all read as 0.8; anything else as null. */
+export function parseSize(value: string | number | undefined | null): number | null {
+  if (value === undefined || value === null) return null;
+  const text = String(value).trim().replace(/%$/, "");
+  if (!/^\d+(\.\d+)?$/.test(text)) return null;
+  const percent = Number(text);
+  if (!Number.isFinite(percent) || percent <= 0) return null;
+  return Math.min(1, percent > 1 ? percent / 100 : percent);
 }
 
 /** `http(s)://` becomes `ws(s)://`, and a bare host gets a `/` path, as the client does. */
@@ -782,8 +798,9 @@ async function openGame(ctx: GameContextLike, config: Config): Promise<void> {
 
         return {
           render(width: number): string[] {
-            const rows = tui?.terminal?.rows ?? 24;
-            return renderFrame(state, width, Math.max(2, rows));
+            const share = parseSize(config.size) ?? 0.8;
+            const rows = Math.max(3, Math.floor((tui?.terminal?.rows ?? 24) * share));
+            return renderFrame(state, width, rows);
           },
           handleInput(data: string): void {
             const key = decodeKey(data);
@@ -801,11 +818,17 @@ async function openGame(ctx: GameContextLike, config: Config): Promise<void> {
           invalidate(): void {},
         };
       },
-      // The game is a screen, not a line of the transcript: take the whole
-      // terminal, on top of Pi's view, with the keyboard. Esc gives it back.
+      // A box in the middle of Pi's page, not the page: the transcript and the
+      // prompt stay visible around it, and the size holds the game to a share of
+      // the screen.
       {
         overlay: true,
-        overlayOptions: { width: "100%", maxHeight: "100%", anchor: "top-left", margin: 0 },
+        overlayOptions: {
+          width: config.size,
+          maxHeight: config.size,
+          anchor: "center",
+          margin: 1,
+        },
         onHandle: (handle: { focus(): void }) => handle.focus(),
       },
     );
