@@ -20,7 +20,8 @@
 - The site footer now has a **play now** modal with a one-line install command
   and a link to crates.io.
 - The live map starts more zoomed out so a larger part of the world is visible.
-- The site now uses the Iosevka typeface.
+- The site now uses the native system UI font, with monospace retained for
+  code, and a simpler play modal.
 
 ### Compatibility
 
